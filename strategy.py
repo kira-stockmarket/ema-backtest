@@ -112,10 +112,19 @@ class InstitutionalBroomBreakout(Strategy):
 
 
 def download_and_prepare_data(ticker="RELIANCE.NS"):
-  # Download historical daily data
-  df = yf.download(ticker, start="2018-01-01", end="2026-01-01", progress=False)
-  if isinstance(df.columns, pd.MultiIndex):
-    df.columns = df.columns.get_level_values(0)
+  # Use Ticker().history() which is safer and less prone to empty returns on cloud runners
+  stock = yf.Ticker(ticker)
+  df = stock.history(start="2018-01-01", end="2026-01-01")
+
+  if df.empty:
+    raise ValueError(
+        f"Downloaded data for {ticker} is empty. Check ticker symbol or"
+        " network connection."
+    )
+
+  # Drop extra timezone info if present to keep index clean
+  if df.index.tz is not None:
+    df.index = df.index.tz_localize(None)
 
   # Resample using modern Pandas offsets ('W' for weekly, 'ME' for month-end)
   df_weekly = df.resample("W").agg({
