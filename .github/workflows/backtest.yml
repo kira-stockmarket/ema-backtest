@@ -33,8 +33,11 @@ jobs:
       run: |
         python strategy.py
 
-    - name: Upload Interactive HTML Report Artifact
+    - name: Upload backtest results
       uses: actions/upload-artifact@v4
       with:
         name: backtest-report
-        path: nifty500_backtest_results.csv
+        path: |
+      nifty500_backtest_results.csv
+      nifty500_trades.csv
+      nifty500_diagnostics.csv
