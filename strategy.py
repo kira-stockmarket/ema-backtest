@@ -1074,4 +1074,3 @@ if __name__ == "__main__":
         # Non-zero exit code makes GitHub Actions correctly
         # mark the workflow as failed.
         raise
-```
