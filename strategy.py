@@ -1,45 +1,9 @@
-"""
-Institutional Broom Breakout Backtest
--------------------------------------
-
-Strategy rules:
-
-1. Macro trend filter:
-   Price > Weekly 200 EMA AND Price > Monthly 200 EMA
-
-2. EMA broom compression:
-   20/50/100/200 daily EMAs are within 3%
-
-3. Consolidation duration:
-   Recent major high occurred 63-147 trading days ago
-
-4. Straight consolidation:
-   Last 20 trading days have <8% high-low range
-
-5. Previous trend cap:
-   Prior 40-day run-up <=40%
-
-6. Breakout confirmation:
-   Price breaks above daily EMAs and Volume Profile POC
-   with >=1.5x 20-day average volume.
-
-Risk management:
-- Initial SL = 1% below 200 EMA
-- TP = current price + 2x measured base depth
-- Trailing SL = 1% below 200 EMA
-
-Important:
-- Historical warm-up data is downloaded before the actual
-  backtest period so that the 200-month EMA can be calculated.
-- The backtest itself is restricted to BACKTEST_START/BACKTEST_END.
-"""
-
-import warnings
-
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 import yfinance as yf
+import requests
+import io
+import time
 
 from backtesting import Backtest, Strategy
 
@@ -48,56 +12,139 @@ from backtesting import Backtest, Strategy
 # CONFIGURATION
 # ============================================================
 
-TICKER = "RELIANCE.NS"
-
 BACKTEST_START = "2018-01-01"
 BACKTEST_END = "2026-01-01"
 
-INITIAL_CASH = 1_000_000
+INITIAL_CASH_PER_STOCK = 1_000_000
 COMMISSION = 0.001
 
-# Daily EMA settings
-EMA_FAST = 20
-EMA_MEDIUM = 50
-EMA_SLOW = 100
-EMA_LONG = 200
-
-# Higher timeframe EMA
-HTF_EMA_LENGTH = 200
-
-# Strategy thresholds
+# Strategy parameters
 EMA_COMPRESSION = 0.03
-CONSOLIDATION_MIN = 63
-CONSOLIDATION_MAX = 147
-BOX_LOOKBACK = 20
-BOX_MAX_RANGE = 0.08
+CONSOLIDATION_MIN_DAYS = 63
+CONSOLIDATION_MAX_DAYS = 147
 
-PRIOR_TREND_LOOKBACK = 40
+BOX_LOOKBACK = 20
+MAX_BOX_RANGE = 0.08
+
 MAX_PRIOR_RUNUP = 0.40
 
-VOLUME_LOOKBACK = 20
-VOLUME_SPIKE_MULTIPLIER = 1.5
+VOLUME_MULTIPLIER = 1.50
 
-STOP_EMA_BUFFER = 0.99
+STOP_EMA_MULTIPLIER = 0.99
 TARGET_MULTIPLIER = 2.0
 
-POC_BINS = 10
+# Small breakout confirmation buffer.
+# 0.0 = close simply has to exceed previous 20-day high.
+BREAKOUT_BUFFER = 0.0
+
+# Download settings
+DOWNLOAD_PERIOD = "max"
+DOWNLOAD_THREADS = 8
+
+NIFTY500_URL = (
+    "https://archives.nseindia.com/"
+    "content/indices/ind_nifty500list.csv"
+)
 
 
 # ============================================================
-# UTILITY FUNCTIONS
+# NIFTY 500 UNIVERSE
 # ============================================================
 
-def calculate_poc(recent_closes, recent_volumes, bins=10):
-    """
-    Calculate Volume Profile Point of Control (POC).
+def get_nifty500_symbols():
 
-    Works with both pandas Series, numpy arrays,
-    and backtesting.py _Array objects.
-    """
+    print("=" * 70)
+    print("DOWNLOADING CURRENT NIFTY 500 UNIVERSE")
+    print("=" * 70)
 
-    # Convert backtesting.py _Array objects
-    # into normal numpy arrays.
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        ),
+        "Accept": "text/csv,application/csv,text/plain,*/*",
+        "Referer": "https://www.niftyindices.com/"
+    }
+
+    response = requests.get(
+        NIFTY500_URL,
+        headers=headers,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    df = pd.read_csv(
+        io.StringIO(
+            response.content.decode(
+                "utf-8-sig"
+            )
+        )
+    )
+
+    # NSE normally provides a column called Symbol.
+    symbol_column = None
+
+    for column in df.columns:
+
+        if str(column).strip().lower() == "symbol":
+            symbol_column = column
+            break
+
+    if symbol_column is None:
+
+        raise ValueError(
+            "Could not find SYMBOL column "
+            "in Nifty 500 CSV.\n"
+            f"Columns received: {list(df.columns)}"
+        )
+
+    symbols = (
+        df[symbol_column]
+        .astype(str)
+        .str.strip()
+        .replace("", np.nan)
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    # Convert NSE symbols to Yahoo Finance symbols.
+    tickers = [
+        f"{symbol}.NS"
+        for symbol in symbols
+        if symbol
+    ]
+
+    print(
+        f"Nifty 500 symbols found: {len(tickers)}"
+    )
+
+    if len(tickers) < 400:
+
+        raise ValueError(
+            "Nifty 500 download returned "
+            f"only {len(tickers)} symbols. "
+            "Refusing to continue because "
+            "the universe appears incomplete."
+        )
+
+    return tickers
+
+
+# ============================================================
+# VOLUME PROFILE POC
+# ============================================================
+
+def calculate_poc(
+    recent_closes,
+    recent_volumes,
+    bins=10
+):
+
     prices = np.asarray(
         recent_closes,
         dtype=float
@@ -108,7 +155,6 @@ def calculate_poc(recent_closes, recent_volumes, bins=10):
         dtype=float
     )
 
-    # Keep only valid price-volume observations.
     valid = (
         np.isfinite(prices)
         &
@@ -129,15 +175,12 @@ def calculate_poc(recent_closes, recent_volumes, bins=10):
         np.max(prices)
     )
 
-    # If all prices are identical,
-    # that price itself is the POC.
     if np.isclose(
         price_min,
         price_max
     ):
         return price_min
 
-    # Create price bins.
     price_bins = np.linspace(
         price_min,
         price_max,
@@ -149,25 +192,19 @@ def calculate_poc(recent_closes, recent_volumes, bins=10):
         dtype=float
     )
 
-    # Allocate each day's volume
-    # to its nearest price bin.
     for price, volume in zip(
         prices,
         volumes
     ):
 
-        bin_index = int(
+        index = int(
             np.abs(
                 price_bins - price
             ).argmin()
         )
 
-        volume_by_price[
-            bin_index
-        ] += volume
+        volume_by_price[index] += volume
 
-    # Point of Control =
-    # price level having maximum volume.
     poc_index = int(
         np.argmax(
             volume_by_price
@@ -178,120 +215,178 @@ def calculate_poc(recent_closes, recent_volumes, bins=10):
         price_bins[poc_index]
     )
 
+
+# ============================================================
+# EMA FUNCTION
+# ============================================================
+
+def calculate_ema(
+    series,
+    period
+):
+
+    return (
+        pd.Series(series)
+        .ewm(
+            span=period,
+            adjust=False,
+            min_periods=period
+        )
+        .mean()
+        .to_numpy()
+    )
+
+
 # ============================================================
 # STRATEGY
 # ============================================================
 
-class InstitutionalBroomBreakout(Strategy):
-    """
-    Institutional Broom Breakout strategy.
-    """
+class InstitutionalBroomBreakout(
+    Strategy
+):
 
     def init(self):
 
+        close = self.data.Close
+
         # ----------------------------------------------------
-        # Daily EMAs
+        # DAILY EMAs
         # ----------------------------------------------------
 
         self.ema20 = self.I(
-            ta.ema,
-            self.data.Close.s,
-            length=EMA_FAST,
+            calculate_ema,
+            close,
+            20,
+            name="EMA20"
         )
 
         self.ema50 = self.I(
-            ta.ema,
-            self.data.Close.s,
-            length=EMA_MEDIUM,
+            calculate_ema,
+            close,
+            50,
+            name="EMA50"
         )
 
         self.ema100 = self.I(
-            ta.ema,
-            self.data.Close.s,
-            length=EMA_SLOW,
+            calculate_ema,
+            close,
+            100,
+            name="EMA100"
         )
 
         self.ema200 = self.I(
-            ta.ema,
-            self.data.Close.s,
-            length=EMA_LONG,
+            calculate_ema,
+            close,
+            200,
+            name="EMA200"
         )
 
         # ----------------------------------------------------
-        # Higher timeframe EMAs
+        # HIGHER TIMEFRAME EMAs
         # ----------------------------------------------------
 
-        self.weekly_200 = self.data.Weekly_200EMA
+        self.weekly_200 = (
+            self.data.Weekly_200EMA
+        )
 
-        self.monthly_200 = self.data.Monthly_200EMA
+        self.monthly_200 = (
+            self.data.Monthly_200EMA
+        )
+
+    # ========================================================
+    # NEXT
+    # ========================================================
 
     def next(self):
 
-        current_bar = len(self.data.Close)
+        # Need sufficient daily history.
+        if len(self.data.Close) < 200:
+            return
 
-        # ----------------------------------------------------
-        # BASIC DATA REQUIREMENT
-        # ----------------------------------------------------
-
-        # Need enough data for:
-        # - 200 EMA
-        # - 200-day consolidation search
-        # - 40-day prior trend
-        # - 20-day box
-        # - 20-day volume profile
-        minimum_bars = max(
-            EMA_LONG,
-            200,
-            BOX_LOOKBACK,
-            VOLUME_LOOKBACK,
-            PRIOR_TREND_LOOKBACK,
+        current_price = float(
+            self.data.Close[-1]
         )
 
-        if current_bar < minimum_bars:
+        weekly_ema = float(
+            self.weekly_200[-1]
+        )
+
+        monthly_ema = float(
+            self.monthly_200[-1]
+        )
+
+        if not np.isfinite(
+            current_price
+        ):
             return
 
-        # ----------------------------------------------------
-        # CURRENT VALUES
-        # ----------------------------------------------------
-
-        current_price = self.data.Close[-1]
-
-        weekly_200 = self.weekly_200[-1]
-        monthly_200 = self.monthly_200[-1]
-
-        ema20 = self.ema20[-1]
-        ema50 = self.ema50[-1]
-        ema100 = self.ema100[-1]
-        ema200 = self.ema200[-1]
-
-        # Reject invalid indicator values.
-        indicator_values = [
-            current_price,
-            weekly_200,
-            monthly_200,
-            ema20,
-            ema50,
-            ema100,
-            ema200,
-        ]
-
-        if not all(np.isfinite(value) for value in indicator_values):
+        if not np.isfinite(
+            weekly_ema
+        ):
             return
 
-        if current_price <= 0:
+        if not np.isfinite(
+            monthly_ema
+        ):
+            return
+
+        # ====================================================
+        # TRAILING STOP
+        # ====================================================
+
+        if self.position:
+
+            new_sl = (
+                float(self.ema200[-1])
+                * STOP_EMA_MULTIPLIER
+            )
+
+            if not np.isfinite(new_sl):
+                return
+
+            for trade in self.trades:
+
+                if trade.sl is None:
+
+                    trade.sl = new_sl
+
+                elif new_sl > trade.sl:
+
+                    trade.sl = new_sl
+
             return
 
         # ====================================================
         # RULE 1
-        # MACRO TREND FILTER
+        # MACRO TREND
         # ====================================================
 
         macro_bullish = (
-            current_price > monthly_200
-            and current_price > weekly_200
+            current_price > monthly_ema
+            and
+            current_price > weekly_ema
         )
 
         if not macro_bullish:
+            return
+
+        # ====================================================
+        # DAILY EMA VALUES
+        # ====================================================
+
+        current_emas = np.array(
+            [
+                self.ema20[-1],
+                self.ema50[-1],
+                self.ema100[-1],
+                self.ema200[-1]
+            ],
+            dtype=float
+        )
+
+        if not np.all(
+            np.isfinite(current_emas)
+        ):
             return
 
         # ====================================================
@@ -299,66 +394,34 @@ class InstitutionalBroomBreakout(Strategy):
         # EMA BROOM COMPRESSION
         # ====================================================
 
-        current_emas = [
-            ema20,
-            ema50,
-            ema100,
-            ema200,
-        ]
-
         ema_spread = (
-            max(current_emas) - min(current_emas)
-        ) / current_price
-
-        is_ema_compressed = (
-            ema_spread < EMA_COMPRESSION
+            (
+                np.max(current_emas)
+                -
+                np.min(current_emas)
+            )
+            /
+            current_price
         )
 
-        # ====================================================
-        # POSITION MANAGEMENT
-        # ====================================================
-
-        if self.position:
-
-            # Trail stop using the 200 EMA.
-            new_sl = ema200 * STOP_EMA_BUFFER
-
-            # Current trade's stop.
-            trade = self.trades[0]
-
-            if trade.sl is None or new_sl > trade.sl:
-                trade.sl = new_sl
-
-            return
-
-        # No position = look for entry.
-        if not is_ema_compressed:
+        if ema_spread >= EMA_COMPRESSION:
             return
 
         # ====================================================
         # RULE 3
-        # CONSOLIDATION DURATION
+        # MAJOR HIGH 63-147 DAYS AGO
         # ====================================================
 
         lookback_window = 200
 
         recent_highs = np.asarray(
-            self.data.High[-lookback_window:],
-            dtype=float,
+            self.data.High[
+                -lookback_window:
+            ],
+            dtype=float
         )
 
-        recent_lows = np.asarray(
-            self.data.Low[-lookback_window:],
-            dtype=float,
-        )
-
-        if len(recent_highs) < lookback_window:
-            return
-
-        if not np.all(np.isfinite(recent_highs)):
-            return
-
-        if not np.all(np.isfinite(recent_lows)):
+        if len(recent_highs) < 200:
             return
 
         highest_idx = int(
@@ -366,38 +429,78 @@ class InstitutionalBroomBreakout(Strategy):
         )
 
         days_since_high = (
-            lookback_window - 1 - highest_idx
+            lookback_window - 1
+            -
+            highest_idx
         )
 
-        is_valid_duration = (
-            CONSOLIDATION_MIN
-            <= days_since_high
-            <= CONSOLIDATION_MAX
-        )
-
-        if not is_valid_duration:
+        if not (
+            CONSOLIDATION_MIN_DAYS
+            <=
+            days_since_high
+            <=
+            CONSOLIDATION_MAX_DAYS
+        ):
             return
+
+        peak_price = float(
+            recent_highs[highest_idx]
+        )
 
         # ====================================================
         # RULE 4
-        # STRAIGHT CONSOLIDATION BOX
+        # PREVIOUS 20-DAY CONSOLIDATION
+        #
+        # IMPORTANT:
+        # CURRENT BREAKOUT CANDLE IS EXCLUDED.
+        #
+        # [-21:-1] =
+        # 20 COMPLETED DAYS BEFORE TODAY.
         # ====================================================
 
-        recent_20_highs = np.asarray(
-            self.data.High[-BOX_LOOKBACK:],
-            dtype=float,
+        previous_20_highs = np.asarray(
+            self.data.High[-21:-1],
+            dtype=float
         )
 
-        recent_20_lows = np.asarray(
-            self.data.Low[-BOX_LOOKBACK:],
-            dtype=float,
+        previous_20_lows = np.asarray(
+            self.data.Low[-21:-1],
+            dtype=float
         )
 
-        if len(recent_20_highs) < BOX_LOOKBACK:
+        previous_20_closes = np.asarray(
+            self.data.Close[-21:-1],
+            dtype=float
+        )
+
+        previous_20_volumes = np.asarray(
+            self.data.Volume[-21:-1],
+            dtype=float
+        )
+
+        if len(previous_20_highs) < 20:
             return
 
-        box_high = np.max(recent_20_highs)
-        box_low = np.min(recent_20_lows)
+        if len(previous_20_lows) < 20:
+            return
+
+        if len(previous_20_closes) < 20:
+            return
+
+        if len(previous_20_volumes) < 20:
+            return
+
+        # ----------------------------------------------------
+        # CONSOLIDATION BOX
+        # ----------------------------------------------------
+
+        box_high = float(
+            np.max(previous_20_highs)
+        )
+
+        box_low = float(
+            np.min(previous_20_lows)
+        )
 
         if box_low <= 0:
             return
@@ -406,11 +509,7 @@ class InstitutionalBroomBreakout(Strategy):
             box_high - box_low
         ) / box_low
 
-        is_straight_consolidation = (
-            box_range < BOX_MAX_RANGE
-        )
-
-        if not is_straight_consolidation:
+        if box_range >= MAX_BOX_RANGE:
             return
 
         # ====================================================
@@ -418,144 +517,175 @@ class InstitutionalBroomBreakout(Strategy):
         # PREVIOUS TREND CAP
         # ====================================================
 
-        if highest_idx <= PRIOR_TREND_LOOKBACK:
+        if highest_idx <= 40:
             return
 
-        prior_trend_start = (
-            highest_idx - PRIOR_TREND_LOOKBACK
+        prior_trend_low = float(
+            np.min(
+                np.asarray(
+                    self.data.Low[
+                        highest_idx - 40:
+                        highest_idx
+                    ],
+                    dtype=float
+                )
+            )
         )
-
-        prior_trend_lows = recent_lows[
-            prior_trend_start:highest_idx
-        ]
-
-        if len(prior_trend_lows) == 0:
-            return
-
-        prior_trend_low = np.min(
-            prior_trend_lows
-        )
-
-        peak_price = recent_highs[highest_idx]
 
         if prior_trend_low <= 0:
             return
 
-        run_up_pct = (
-            peak_price - prior_trend_low
+        prior_runup = (
+            peak_price
+            -
+            prior_trend_low
         ) / prior_trend_low
 
-        is_healthy_trend = (
-            run_up_pct <= MAX_PRIOR_RUNUP
+        if prior_runup > MAX_PRIOR_RUNUP:
+            return
+
+        # ====================================================
+        # RULE 6
+        # ACTUAL BREAKOUT TRIGGER
+        # ====================================================
+
+        breakout_level = (
+            box_high
+            *
+            (1.0 + BREAKOUT_BUFFER)
         )
 
-        if not is_healthy_trend:
+        # Today's CLOSE must break the
+        # previous 20-day consolidation high.
+        price_breakout = (
+            current_price
+            >
+            breakout_level
+        )
+
+        if not price_breakout:
+            return
+
+        # ----------------------------------------------------
+        # PRICE MUST ALSO BE ABOVE ALL EMAs
+        # ----------------------------------------------------
+
+        above_all_emas = (
+            current_price
+            >
+            np.max(current_emas)
+        )
+
+        if not above_all_emas:
             return
 
         # ====================================================
         # VOLUME PROFILE
+        #
+        # IMPORTANT:
+        # POC uses ONLY PREVIOUS 20 DAYS.
+        # Current breakout day is excluded.
         # ====================================================
-
-        recent_closes = self.data.Close[
-            -VOLUME_LOOKBACK:
-        ]
-
-        recent_volumes = self.data.Volume[
-            -VOLUME_LOOKBACK:
-        ]
-
-        if len(recent_closes) < VOLUME_LOOKBACK:
-            return
 
         poc_price = calculate_poc(
-            recent_closes,
-            recent_volumes,
+            previous_20_closes,
+            previous_20_volumes,
+            bins=10
         )
 
-        if not np.isfinite(poc_price):
+        if not np.isfinite(
+            poc_price
+        ):
             return
 
-        # ====================================================
-        # BREAKOUT CONFIRMATION
-        # ====================================================
-
-        max_ema = max(current_emas)
-
-        is_breakout = (
-            current_price > max_ema
-            and current_price > poc_price
+        above_poc = (
+            current_price
+            >
+            poc_price
         )
 
-        if not is_breakout:
+        if not above_poc:
             return
 
         # ====================================================
         # VOLUME SPIKE
+        #
+        # IMPORTANT:
+        # Average volume uses PREVIOUS 20 DAYS.
+        # Today's breakout volume is NOT included
+        # in the denominator.
         # ====================================================
 
-        recent_volume_array = np.asarray(
-            recent_volumes,
-            dtype=float,
-        )
-
-        if not np.all(
-            np.isfinite(recent_volume_array)
-        ):
-            return
-
-        average_volume = np.mean(
-            recent_volume_array
-        )
-
-        current_volume = float(
-            self.data.Volume[-1]
+        average_volume = float(
+            np.mean(
+                previous_20_volumes
+            )
         )
 
         if average_volume <= 0:
             return
 
-        volume_spike = (
-            current_volume
-            > average_volume
-            * VOLUME_SPIKE_MULTIPLIER
+        current_volume = float(
+            self.data.Volume[-1]
         )
 
-        if not volume_spike:
+        volume_breakout = (
+            current_volume
+            >
+            average_volume
+            *
+            VOLUME_MULTIPLIER
+        )
+
+        if not volume_breakout:
             return
 
         # ====================================================
-        # STOP LOSS
+        # ALL ENTRY CONDITIONS PASSED
         # ====================================================
 
+        # ----------------------------------------------------
+        # STOP LOSS
+        # ----------------------------------------------------
+
         sl_price = (
-            ema200 * STOP_EMA_BUFFER
+            float(self.ema200[-1])
+            *
+            STOP_EMA_MULTIPLIER
         )
 
-        # Stop must be below current price.
+        if not np.isfinite(
+            sl_price
+        ):
+            return
+
         if sl_price >= current_price:
             return
 
         # ====================================================
-        # MEASURED MOVE TARGET
+        # MEASURED MOVE
         # ====================================================
 
-        # Base low over the period since the major high.
-        #
-        # Include the available consolidation period.
-        base_period = recent_lows[
-            highest_idx:
-        ]
+        # Base is the consolidation after
+        # the major high and before today.
+        post_peak_lows = np.asarray(
+            self.data.Low[
+                highest_idx:-1
+            ],
+            dtype=float
+        )
 
-        if len(base_period) == 0:
+        if len(post_peak_lows) == 0:
             return
 
-        base_low = np.min(base_period)
-
-        if base_low <= 0:
-            return
+        base_low = float(
+            np.min(post_peak_lows)
+        )
 
         base_depth = (
-            peak_price - base_low
+            peak_price
+            -
+            base_low
         )
 
         if base_depth <= 0:
@@ -563,515 +693,462 @@ class InstitutionalBroomBreakout(Strategy):
 
         tp_price = (
             current_price
-            + TARGET_MULTIPLIER
-            * base_depth
+            +
+            TARGET_MULTIPLIER
+            *
+            base_depth
         )
 
-        # Target must be above entry.
         if tp_price <= current_price:
             return
 
         # ====================================================
-        # EXECUTION
+        # BUY
         # ====================================================
 
         self.buy(
-            sl=float(sl_price),
-            tp=float(tp_price),
+            sl=sl_price,
+            tp=tp_price
         )
 
 
 # ============================================================
-# DATA DOWNLOAD AND PREPARATION
+# DATA PREPARATION
 # ============================================================
 
-def download_and_prepare_data(
-    ticker: str = TICKER,
-    backtest_start: str = BACKTEST_START,
-    backtest_end: str = BACKTEST_END,
-) -> pd.DataFrame:
-    """
-    Download data and prepare all indicators.
+def prepare_stock_data(
+    raw_df,
+    ticker
+):
 
-    IMPORTANT:
-    We intentionally download maximum available history.
+    if raw_df is None:
+        return None
 
-    Why?
+    if raw_df.empty:
+        return None
 
-    The strategy uses a 200-month EMA.
-
-    200 months ~= 16.7 years.
-
-    If we downloaded only 2018-2026 data, there would not
-    be enough monthly observations to calculate the indicator.
-
-    We therefore:
-
-        1. Download maximum available history.
-        2. Calculate Weekly 200 EMA.
-        3. Calculate Monthly 200 EMA.
-        4. Align those indicators to daily data.
-        5. Remove the warm-up period.
-        6. Keep only the requested backtest period.
-    """
-
-    print("=" * 70)
-    print("DOWNLOADING DATA")
-    print("=" * 70)
-
-    print(f"Ticker       : {ticker}")
-    print(f"Backtest     : {backtest_start} -> {backtest_end}")
+    df = raw_df.copy()
 
     # --------------------------------------------------------
-    # DOWNLOAD
+    # MultiIndex handling
     # --------------------------------------------------------
 
-    try:
-        stock = yf.Ticker(ticker)
+    if isinstance(
+        df.columns,
+        pd.MultiIndex
+    ):
 
-        df = stock.history(
-            period="max",
-            auto_adjust=False,
-            actions=False,
-        )
+        # If this is a single ticker extracted
+        # from yf.download(), flatten columns.
+        if len(
+            df.columns.levels
+        ) > 1:
 
-    except Exception as exc:
-        raise RuntimeError(
-            f"Yahoo Finance download failed for {ticker}: {exc}"
-        ) from exc
+            df.columns = [
+                column[0]
+                if isinstance(
+                    column,
+                    tuple
+                )
+                else column
+                for column in df.columns
+            ]
 
-    if df is None or df.empty:
-        raise ValueError(
-            f"Yahoo Finance returned EMPTY data for {ticker}."
-        )
-
-    # --------------------------------------------------------
-    # CLEAN INDEX
-    # --------------------------------------------------------
-
-    if not isinstance(df.index, pd.DatetimeIndex):
-        df.index = pd.to_datetime(df.index)
-
-    if df.index.tz is not None:
-        df.index = df.index.tz_localize(None)
-
-    df = df.sort_index()
-
-    # Remove duplicate dates.
-    df = df[~df.index.duplicated(keep="last")]
-
-    required_columns = [
+    required = [
         "Open",
         "High",
         "Low",
         "Close",
-        "Volume",
+        "Volume"
     ]
 
-    missing_columns = [
-        column
-        for column in required_columns
-        if column not in df.columns
-    ]
+    for column in required:
 
-    if missing_columns:
-        raise ValueError(
-            f"Yahoo Finance data is missing columns: "
-            f"{missing_columns}"
+        if column not in df.columns:
+            return None
+
+    df = df[
+        required
+    ].copy()
+
+    # --------------------------------------------------------
+    # Clean index
+    # --------------------------------------------------------
+
+    if df.index.tz is not None:
+
+        df.index = (
+            df.index
+            .tz_localize(None)
         )
 
-    df = df[required_columns].copy()
+    df = df.sort_index()
+
+    df = df[
+        ~df.index.duplicated(
+            keep="last"
+        )
+    ]
 
     # --------------------------------------------------------
-    # NUMERIC CLEANING
+    # Numeric conversion
     # --------------------------------------------------------
 
-    for column in required_columns:
+    for column in required:
+
         df[column] = pd.to_numeric(
             df[column],
-            errors="coerce",
+            errors="coerce"
         )
 
-    df.dropna(
+    df = df.dropna(
+        subset=required
+    )
+
+    if len(df) < 1000:
+        return None
+
+    # ========================================================
+    # WEEKLY
+    # ========================================================
+
+    weekly = (
+        df
+        .resample("W")
+        .agg(
+            {
+                "Open": "first",
+                "High": "max",
+                "Low": "min",
+                "Close": "last",
+                "Volume": "sum"
+            }
+        )
+        .dropna(
+            subset=["Close"]
+        )
+    )
+
+    weekly[
+        "Weekly_200EMA"
+    ] = (
+        weekly["Close"]
+        .ewm(
+            span=200,
+            adjust=False,
+            min_periods=200
+        )
+        .mean()
+    )
+
+    # ========================================================
+    # MONTHLY
+    # ========================================================
+
+    monthly = (
+        df
+        .resample("ME")
+        .agg(
+            {
+                "Open": "first",
+                "High": "max",
+                "Low": "min",
+                "Close": "last",
+                "Volume": "sum"
+            }
+        )
+        .dropna(
+            subset=["Close"]
+        )
+    )
+
+    monthly[
+        "Monthly_200EMA"
+    ] = (
+        monthly["Close"]
+        .ewm(
+            span=200,
+            adjust=False,
+            min_periods=200
+        )
+        .mean()
+    )
+
+    # ========================================================
+    # ALIGN HIGHER TIMEFRAME EMA
+    # ========================================================
+
+    df[
+        "Weekly_200EMA"
+    ] = (
+        weekly["Weekly_200EMA"]
+        .reindex(df.index)
+        .ffill()
+    )
+
+    df[
+        "Monthly_200EMA"
+    ] = (
+        monthly["Monthly_200EMA"]
+        .reindex(df.index)
+        .ffill()
+    )
+
+    # ========================================================
+    # BACKTEST PERIOD
+    # ========================================================
+
+    start = pd.Timestamp(
+        BACKTEST_START
+    )
+
+    end = pd.Timestamp(
+        BACKTEST_END
+    )
+
+    df = df.loc[
+        (df.index >= start)
+        &
+        (df.index < end)
+    ].copy()
+
+    # ========================================================
+    # REQUIRED INDICATOR DATA
+    # ========================================================
+
+    df = df.dropna(
         subset=[
             "Open",
             "High",
             "Low",
             "Close",
-        ],
-        inplace=True,
+            "Volume",
+            "Weekly_200EMA",
+            "Monthly_200EMA"
+        ]
     )
-
-    # --------------------------------------------------------
-    # WEEKLY DATA
-    # --------------------------------------------------------
-
-    print("\nCalculating Weekly 200 EMA...")
-
-    df_weekly = df.resample("W").agg(
-        {
-            "Open": "first",
-            "High": "max",
-            "Low": "min",
-            "Close": "last",
-            "Volume": "sum",
-        }
-    )
-
-    df_weekly.dropna(
-        subset=["Close"],
-        inplace=True,
-    )
-
-    df_weekly["Weekly_200EMA"] = ta.ema(
-        df_weekly["Close"],
-        length=HTF_EMA_LENGTH,
-    )
-
-    # --------------------------------------------------------
-    # MONTHLY DATA
-    # --------------------------------------------------------
-
-    print("Calculating Monthly 200 EMA...")
-
-    df_monthly = df.resample("ME").agg(
-        {
-            "Open": "first",
-            "High": "max",
-            "Low": "min",
-            "Close": "last",
-            "Volume": "sum",
-        }
-    )
-
-    df_monthly.dropna(
-        subset=["Close"],
-        inplace=True,
-    )
-
-    df_monthly["Monthly_200EMA"] = ta.ema(
-        df_monthly["Close"],
-        length=HTF_EMA_LENGTH,
-    )
-
-    # --------------------------------------------------------
-    # DIAGNOSTICS
-    # --------------------------------------------------------
-
-    valid_weekly = (
-        df_weekly["Weekly_200EMA"]
-        .notna()
-        .sum()
-    )
-
-    valid_monthly = (
-        df_monthly["Monthly_200EMA"]
-        .notna()
-        .sum()
-    )
-
-    print(
-        f"Weekly 200 EMA valid observations : {valid_weekly}"
-    )
-
-    print(
-        f"Monthly 200 EMA valid observations: {valid_monthly}"
-    )
-
-    if valid_monthly == 0:
-        raise ValueError(
-            "Monthly 200 EMA could not be calculated. "
-            "Yahoo Finance did not provide enough historical "
-            "monthly data."
-        )
-
-    # --------------------------------------------------------
-    # ALIGN HIGHER TIMEFRAME INDICATORS
-    # --------------------------------------------------------
-
-    # IMPORTANT:
-    #
-    # Monthly EMA is only known after the monthly candle closes.
-    #
-    # By joining month-end values to daily data and forward
-    # filling, the completed monthly EMA becomes available
-    # from the following daily observations.
-    #
-    # This prevents using a future monthly EMA value.
-    #
-    # Same concept applies to Weekly EMA.
-
-    df["Weekly_200EMA"] = (
-        df_weekly["Weekly_200EMA"]
-        .reindex(df.index)
-        .ffill()
-    )
-
-    df["Monthly_200EMA"] = (
-        df_monthly["Monthly_200EMA"]
-        .reindex(df.index)
-        .ffill()
-    )
-
-    # --------------------------------------------------------
-    # DAILY EMAS
-    # --------------------------------------------------------
-
-    # Calculate these here as a diagnostic/reference.
-    # The actual Strategy calculates them again through
-    # self.I(), which is required by backtesting.py.
-    df["EMA20"] = ta.ema(
-        df["Close"],
-        length=EMA_FAST,
-    )
-
-    df["EMA50"] = ta.ema(
-        df["Close"],
-        length=EMA_MEDIUM,
-    )
-
-    df["EMA100"] = ta.ema(
-        df["Close"],
-        length=EMA_SLOW,
-    )
-
-    df["EMA200"] = ta.ema(
-        df["Close"],
-        length=EMA_LONG,
-    )
-
-    # --------------------------------------------------------
-    # CHECK BEFORE BACKTEST PERIOD
-    # --------------------------------------------------------
-
-    # DO NOT use dropna() on the complete dataset here.
-    #
-    # That could accidentally delete the entire dataset because
-    # of an indicator that is still warming up.
-    #
-    # Instead, select the actual backtest period first.
-
-    backtest_start_ts = pd.Timestamp(
-        backtest_start
-    )
-
-    backtest_end_ts = pd.Timestamp(
-        backtest_end
-    )
-
-    df = df.loc[
-        (df.index >= backtest_start_ts)
-        & (df.index < backtest_end_ts)
-    ].copy()
-
-    # --------------------------------------------------------
-    # FINAL DATA CLEANING
-    # --------------------------------------------------------
-
-    final_required_columns = [
-        "Open",
-        "High",
-        "Low",
-        "Close",
-        "Volume",
-        "Weekly_200EMA",
-        "Monthly_200EMA",
-    ]
-
-    df.dropna(
-        subset=final_required_columns,
-        inplace=True,
-    )
-
-    # --------------------------------------------------------
-    # FINAL VALIDATION
-    # --------------------------------------------------------
 
     if df.empty:
-        raise ValueError(
-            "FINAL DATAFRAME IS EMPTY after data preparation.\n"
-            "Possible reasons:\n"
-            "1. Insufficient Yahoo Finance history.\n"
-            "2. Requested backtest period is unavailable.\n"
-            "3. Higher timeframe EMA could not be aligned."
-        )
-
-    if len(df) < 250:
-        raise ValueError(
-            f"Only {len(df)} daily rows are available for the "
-            "backtest. At least 250 rows are recommended."
-        )
-
-    # Check OHLC integrity.
-    invalid_ohlc = (
-        (df["High"] < df["Low"])
-        | (df["High"] < df["Open"])
-        | (df["High"] < df["Close"])
-        | (df["Low"] > df["Open"])
-        | (df["Low"] > df["Close"])
-    )
-
-    if invalid_ohlc.any():
-        bad_rows = int(invalid_ohlc.sum())
-
-        raise ValueError(
-            f"Found {bad_rows} rows with invalid OHLC data."
-        )
-
-    # --------------------------------------------------------
-    # REMOVE EXTRA DIAGNOSTIC EMA COLUMNS
-    # --------------------------------------------------------
-
-    df.drop(
-        columns=[
-            "EMA20",
-            "EMA50",
-            "EMA100",
-            "EMA200",
-        ],
-        inplace=True,
-        errors="ignore",
-    )
-
-    # --------------------------------------------------------
-    # FINAL REPORT
-    # --------------------------------------------------------
-
-    print("\n" + "=" * 70)
-    print("DATA READY")
-    print("=" * 70)
-
-    print(
-        f"Rows         : {len(df):,}"
-    )
-
-    print(
-        f"First date   : {df.index.min().date()}"
-    )
-
-    print(
-        f"Last date    : {df.index.max().date()}"
-    )
-
-    print(
-        f"Monthly EMA  : {df['Monthly_200EMA'].notna().sum():,} valid"
-    )
-
-    print(
-        f"Weekly EMA   : {df['Weekly_200EMA'].notna().sum():,} valid"
-    )
-
-    print("=" * 70)
+        return None
 
     return df
 
 
 # ============================================================
-# BACKTEST
+# DOWNLOAD ALL NIFTY 500 DATA
 # ============================================================
 
-def run_backtest(
-    ticker: str = TICKER,
-) -> None:
-    """
-    Run the complete backtest.
-    """
+def download_nifty500_data(
+    tickers
+):
 
-    data = download_and_prepare_data(
-        ticker=ticker,
-        backtest_start=BACKTEST_START,
-        backtest_end=BACKTEST_END,
+    print("\n")
+    print("=" * 70)
+    print(
+        f"DOWNLOADING DATA FOR "
+        f"{len(tickers)} NIFTY 500 STOCKS"
+    )
+    print("=" * 70)
+
+    print(
+        "This may take several minutes."
     )
 
     # --------------------------------------------------------
-    # FINAL SAFETY CHECK
+    # Yahoo supports multiple ticker downloads.
+    # Chunking reduces the chance of rate limits.
     # --------------------------------------------------------
 
-    if data.empty:
-        raise ValueError(
-            "Cannot start backtest because OHLC data is empty."
-        )
+    chunk_size = 50
 
-    ohlc_columns = [
-        "Open",
-        "High",
-        "Low",
-        "Close",
-        "Volume",
-    ]
+    all_data = {}
 
-    missing_ohlc = [
-        column
-        for column in ohlc_columns
-        if column not in data.columns
-    ]
+    for start_index in range(
+        0,
+        len(tickers),
+        chunk_size
+    ):
 
-    if missing_ohlc:
-        raise ValueError(
-            f"Missing OHLC columns: {missing_ohlc}"
-        )
+        chunk = tickers[
+            start_index:
+            start_index + chunk_size
+        ]
 
-    # --------------------------------------------------------
-    # CREATE BACKTEST
-    # --------------------------------------------------------
+        chunk_number = (
+            start_index // chunk_size
+        ) + 1
 
-    print("\n" + "=" * 70)
-    print("STARTING BACKTEST")
-    print("=" * 70)
-
-    bt = Backtest(
-        data,
-        InstitutionalBroomBreakout,
-        cash=INITIAL_CASH,
-        commission=COMMISSION,
-        exclusive_orders=True,
-    )
-
-    # --------------------------------------------------------
-    # RUN
-    # --------------------------------------------------------
-
-    stats = bt.run()
-
-    # --------------------------------------------------------
-    # RESULTS
-    # --------------------------------------------------------
-
-    print("\n" + "=" * 70)
-    print("BACKTEST RESULTS")
-    print("=" * 70)
-
-    print(stats)
-
-    print("=" * 70)
-
-    # --------------------------------------------------------
-    # EXPORT HTML REPORT
-    # --------------------------------------------------------
-
-    print("\nGenerating HTML backtest report...")
-
-    try:
-
-        bt.plot(
-            filename="backtest_report.html",
-            open_browser=False,
+        total_chunks = int(
+            np.ceil(
+                len(tickers)
+                /
+                chunk_size
+            )
         )
 
         print(
-            "HTML report created: backtest_report.html"
+            f"\nDownloading chunk "
+            f"{chunk_number}/{total_chunks} "
+            f"({len(chunk)} stocks)..."
         )
 
-    except Exception as exc:
+        try:
 
-        # Plotting failure should not hide the actual backtest
-        # result.
-        warnings.warn(
-            f"Backtest completed, but HTML plot generation "
-            f"failed: {exc}"
+            raw = yf.download(
+                chunk,
+                period=DOWNLOAD_PERIOD,
+                interval="1d",
+                group_by="ticker",
+                auto_adjust=False,
+                actions=False,
+                threads=DOWNLOAD_THREADS,
+                progress=False,
+                timeout=30,
+                multi_level_index=True
+            )
+
+        except Exception as error:
+
+            print(
+                "Chunk download failed:"
+            )
+
+            print(error)
+
+            continue
+
+        if raw is None or raw.empty:
+
+            print(
+                "No data returned "
+                "for this chunk."
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Extract each ticker.
+        # ----------------------------------------------------
+
+        for ticker in chunk:
+
+            try:
+
+                if (
+                    isinstance(
+                        raw.columns,
+                        pd.MultiIndex
+                    )
+                    and
+                    ticker in raw.columns
+                ):
+
+                    stock_df = raw[
+                        ticker
+                    ].copy()
+
+                else:
+
+                    # Single-level fallback.
+                    stock_df = raw.copy()
+
+                if stock_df.empty:
+                    continue
+
+                prepared = prepare_stock_data(
+                    stock_df,
+                    ticker
+                )
+
+                if prepared is not None:
+
+                    all_data[ticker] = (
+                        prepared
+                    )
+
+            except Exception as error:
+
+                print(
+                    f"Skipping {ticker}: "
+                    f"{error}"
+                )
+
+        print(
+            f"Usable stocks so far: "
+            f"{len(all_data)}"
         )
 
-    print("\nBacktest completed successfully.")
+        # Small pause between chunks.
+        time.sleep(2)
+
+    return all_data
+
+
+# ============================================================
+# RUN ONE STOCK
+# ============================================================
+
+def run_single_stock(
+    ticker,
+    data
+):
+
+    try:
+
+        bt = Backtest(
+            data,
+            InstitutionalBroomBreakout,
+            cash=INITIAL_CASH_PER_STOCK,
+            commission=COMMISSION,
+            exclusive_orders=True
+        )
+
+        stats = bt.run()
+
+        trades = int(
+            stats["# Trades"]
+        )
+
+        if trades == 0:
+
+            return {
+                "Ticker": ticker,
+                "Trades": 0,
+                "Return [%]": 0.0,
+                "Win Rate [%]": 0.0,
+                "Max Drawdown [%]": 0.0,
+                "Equity Final [$]":
+                    INITIAL_CASH_PER_STOCK
+            }
+
+        return {
+            "Ticker": ticker,
+            "Trades": trades,
+            "Return [%]":
+                float(stats["Return [%]"]),
+            "Win Rate [%]":
+                float(stats["Win Rate [%]"]),
+            "Max Drawdown [%]":
+                float(stats["Max. Drawdown [%]"]),
+            "Equity Final [$]":
+                float(stats["Equity Final [$]"])
+        }
+
+    except Exception as error:
+
+        print(
+            f"ERROR in {ticker}: "
+            f"{error}"
+        )
+
+        return {
+            "Ticker": ticker,
+            "Trades": -1,
+            "Return [%]": np.nan,
+            "Win Rate [%]": np.nan,
+            "Max Drawdown [%]": np.nan,
+            "Equity Final [$]": np.nan
+        }
 
 
 # ============================================================
@@ -1080,24 +1157,207 @@ def run_backtest(
 
 if __name__ == "__main__":
 
-    try:
+    print("\n")
+    print("=" * 70)
+    print(
+        "INSTITUTIONAL BROOM BREAKOUT"
+    )
+    print(
+        "NIFTY 500 UNIVERSE BACKTEST"
+    )
+    print("=" * 70)
 
-        run_backtest(
-            ticker=TICKER,
-        )
+    print(
+        f"Backtest: "
+        f"{BACKTEST_START} "
+        f"to "
+        f"{BACKTEST_END}"
+    )
 
-    except Exception as exc:
+    # ========================================================
+    # GET UNIVERSE
+    # ========================================================
 
-        print("\n" + "=" * 70)
-        print("BACKTEST FAILED")
-        print("=" * 70)
+    tickers = get_nifty500_symbols()
+
+    # ========================================================
+    # DOWNLOAD DATA
+    # ========================================================
+
+    all_data = download_nifty500_data(
+        tickers
+    )
+
+    print("\n")
+    print("=" * 70)
+    print(
+        f"USABLE STOCKS: "
+        f"{len(all_data)}"
+    )
+    print("=" * 70)
+
+    # ========================================================
+    # RUN BACKTESTS
+    # ========================================================
+
+    results = []
+
+    total = len(all_data)
+
+    for number, (
+        ticker,
+        data
+    ) in enumerate(
+        all_data.items(),
+        start=1
+    ):
 
         print(
-            f"{type(exc).__name__}: {exc}"
+            f"[{number}/{total}] "
+            f"Testing {ticker}..."
         )
 
-        print("=" * 70)
+        result = run_single_stock(
+            ticker,
+            data
+        )
 
-        # Non-zero exit code makes GitHub Actions correctly
-        # mark the workflow as failed.
-        raise
+        results.append(
+            result
+        )
+
+    # ========================================================
+    # RESULTS DATAFRAME
+    # ========================================================
+
+    results_df = pd.DataFrame(
+        results
+    )
+
+    if results_df.empty:
+
+        raise ValueError(
+            "No backtest results generated."
+        )
+
+    # ========================================================
+    # SORT
+    # ========================================================
+
+    results_df = results_df.sort_values(
+        by="Return [%]",
+        ascending=False
+    )
+
+    # ========================================================
+    # SAVE RESULTS
+    # ========================================================
+
+    results_df.to_csv(
+        "nifty500_backtest_results.csv",
+        index=False
+    )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    successful = results_df[
+        results_df["Trades"] >= 0
+    ]
+
+    stocks_with_trades = results_df[
+        results_df["Trades"] > 0
+    ]
+
+    total_trades = int(
+        stocks_with_trades[
+            "Trades"
+        ].sum()
+    )
+
+    print("\n")
+    print("=" * 70)
+    print(
+        "NIFTY 500 BACKTEST COMPLETE"
+    )
+    print("=" * 70)
+
+    print(
+        f"Universe size: "
+        f"{len(tickers)}"
+    )
+
+    print(
+        f"Stocks successfully tested: "
+        f"{len(successful)}"
+    )
+
+    print(
+        f"Stocks generating trades: "
+        f"{len(stocks_with_trades)}"
+    )
+
+    print(
+        f"Total trades: "
+        f"{total_trades}"
+    )
+
+    # ========================================================
+    # TOP STOCKS
+    # ========================================================
+
+    if not stocks_with_trades.empty:
+
+        print("\n")
+        print(
+            "TOP 20 STOCKS BY INDIVIDUAL "
+            "BACKTEST RETURN"
+        )
+
+        print(
+            stocks_with_trades[
+                [
+                    "Ticker",
+                    "Trades",
+                    "Return [%]",
+                    "Win Rate [%]",
+                    "Max Drawdown [%]"
+                ]
+            ]
+            .head(20)
+            .to_string(
+                index=False
+            )
+        )
+
+    # ========================================================
+    # TRADE COUNT DISTRIBUTION
+    # ========================================================
+
+    print("\n")
+    print(
+        "TRADE COUNT DISTRIBUTION"
+    )
+
+    print(
+        results_df[
+            "Trades"
+        ].value_counts()
+        .sort_index()
+        .to_string()
+    )
+
+    print("\n")
+    print(
+        "Results saved to:"
+    )
+
+    print(
+        "nifty500_backtest_results.csv"
+    )
+
+    print("\n")
+    print(
+        "BACKTEST COMPLETED."
+    )
