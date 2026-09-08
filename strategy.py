@@ -3,13 +3,14 @@ import pandas as pd
 import yfinance as yf
 from backtesting import Backtest, Strategy
 import warnings
+from datetime import datetime
 
-# Suppress yfinance and pandas warnings for clean console output
+# Suppress warnings for clean console output
 warnings.filterwarnings('ignore')
 
 def calculate_ema(series, length):
-    """Native Pandas EMA calculation (replaces pandas-ta completely)"""
-    return series.ewm(span=length, adjust=False).mean()
+    """Native Pandas EMA calculation, handles missing early data gracefully"""
+    return series.ewm(span=length, adjust=False, min_periods=1).mean()
 
 def calculate_poc(recent_closes, recent_volumes, bins=10):
     price_bins = np.linspace(recent_closes.min(), recent_closes.max(), bins)
@@ -24,18 +25,19 @@ def calculate_poc(recent_closes, recent_volumes, bins=10):
 
 class InstitutionalBroomBreakout(Strategy):
     def init(self):
-        # Native EMA calculations
+        # Native EMA calculations on daily data
         close_series = self.data.Close.s
         self.ema20 = self.I(calculate_ema, close_series, 20)
         self.ema50 = self.I(calculate_ema, close_series, 50)
         self.ema100 = self.I(calculate_ema, close_series, 100)
         self.ema200 = self.I(calculate_ema, close_series, 200)
 
-        # Higher Timeframe EMAs passed via DataFrame
+        # Access Higher Timeframe EMAs passed via the dataframe
         self.weekly_200 = self.data.Weekly_200EMA
         self.monthly_200 = self.data.Monthly_200EMA
 
     def next(self):
+        # Ensure we have enough lookback data and the indicator is valid
         if len(self.data.Close) < 200 or np.isnan(self.monthly_200[-1]):
             return
 
@@ -46,10 +48,10 @@ class InstitutionalBroomBreakout(Strategy):
         if not macro_bullish:
             return
 
-        # --- RULE 2: EMA BROOM COMPRESSION ---
+        # --- RULE 2: EMA BROOM COMPRESSION (Relaxed to 5% to account for market noise) ---
         current_emas = [self.ema20[-1], self.ema50[-1], self.ema100[-1], self.ema200[-1]]
         spread = (max(current_emas) - min(current_emas)) / current_price
-        is_ema_compressed = spread < 0.03  
+        is_ema_compressed = spread < 0.05  
 
         if is_ema_compressed and not self.position:
             # --- RULE 3: CONSOLIDATION DURATION (63 to 147 bars) ---
@@ -59,12 +61,12 @@ class InstitutionalBroomBreakout(Strategy):
             days_since_high = (lookback_window - 1) - highest_idx
             is_valid_duration = 63 <= days_since_high <= 147
 
-            # --- RULE 4: STRAIGHT CONSOLIDATION BOX (< 8% over last 20 days) ---
+            # --- RULE 4: STRAIGHT CONSOLIDATION BOX (Relaxed to < 12% over last 20 days) ---
             recent_20_highs = self.data.High[-20:]
             recent_20_lows = self.data.Low[-20:]
             box_high = max(recent_20_highs)
             box_low = min(recent_20_lows)
-            is_straight_consolidation = ((box_high - box_low) / box_low) < 0.08
+            is_straight_consolidation = ((box_high - box_low) / box_low) < 0.12
 
             # --- RULE 5: PREVIOUS TREND CAP (<= 40% prior run-up) ---
             if highest_idx > 40:
@@ -97,9 +99,10 @@ class InstitutionalBroomBreakout(Strategy):
             if new_sl > self.trades[0].sl:
                 self.trades[0].sl = new_sl
 
-def download_and_prepare_data(ticker, start_date="2018-01-01"):
+def download_and_prepare_data(ticker):
+    # CRITICAL FIX: Fetch from year 2000 to give the 200 Monthly EMA 16+ years to warm up
     stock = yf.Ticker(ticker)
-    df = stock.history(start=start_date)
+    df = stock.history(start="2000-01-01")
 
     if df.empty or len(df) < 250:
         return None
@@ -114,25 +117,45 @@ def download_and_prepare_data(ticker, start_date="2018-01-01"):
     df_weekly["Weekly_200EMA"] = calculate_ema(df_weekly["Close"], 200)
     df_monthly["Monthly_200EMA"] = calculate_ema(df_monthly["Close"], 200)
 
+    # Merge data and forward-fill to prevent lookahead bias
     df = df.join(df_weekly[["Weekly_200EMA"]]).ffill()
     df = df.join(df_monthly[["Monthly_200EMA"]]).ffill()
     df.dropna(inplace=True)
+
+    # CRITICAL FIX: Slice the dataframe to only test trades from 2018 onwards
+    df = df[df.index >= "2018-01-01"]
+    
+    # Check again if data exists post-2018
+    if df.empty or len(df) < 50:
+        return None
+
     return df
 
 if __name__ == "__main__":
-    # Nifty 100 sample (can be expanded up to 100)
-    nifty_tickers = [
-        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-        "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS",
-        "L&T.NS", "AXISBANK.NS", "BAJFINANCE.NS", "MARUTI.NS", "ASIANPAINT.NS",
-        "TATAMOTORS.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "BAJAJFINSV.NS"
+    # TRUE NIFTY 100 LIST
+    nifty_100_tickers = [
+        "ABB.NS", "ACC.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "AMBUJACEM.NS", 
+        "APOLLOHOSP.NS", "ASIANPAINT.NS", "DMART.NS", "AXISBANK.NS", "BAJAJ-AUTO.NS", 
+        "BAJFINANCE.NS", "BAJAJFINSV.NS", "BANKBARODA.NS", "BEL.NS", "BHARATFORG.NS", 
+        "BPCL.NS", "BHARTIARTL.NS", "BHEL.NS", "BOSCHLTD.NS", "CANBK.NS", "CIPLA.NS", 
+        "COALINDIA.NS", "COFORGE.NS", "COLPAL.NS", "CONCOR.NS", "CROMPTON.NS", "DABUR.NS", 
+        "DIVISLAB.NS", "DLF.NS", "DRREDDY.NS", "EICHERMOT.NS", "GAIL.NS", "GODREJCP.NS", 
+        "GODREJPROP.NS", "GRASIM.NS", "HAVELLS.NS", "HCLTECH.NS", "HDFCBANK.NS", "HDFCLIFE.NS", 
+        "HEROMOTOCO.NS", "HINDALCO.NS", "HAL.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "ICICIGI.NS", 
+        "ICICIPRULI.NS", "ITC.NS", "IOC.NS", "IRCTC.NS", "INFY.NS", "INDIGO.NS", "JSWSTEEL.NS", 
+        "JINDALSTEL.NS", "KOTAKBANK.NS", "L&T.NS", "LTIM.NS", "LTTS.NS", "M&M.NS", "MARICO.NS", 
+        "MARUTI.NS", "MUTHOOTFIN.NS", "NTPC.NS", "NESTLEIND.NS", "ONGC.NS", "PAGEIND.NS", 
+        "PIDILITIND.NS", "PIIND.NS", "POWERGRID.NS", "PNB.NS", "RELIANCE.NS", "SBICARD.NS", 
+        "SBILIFE.NS", "SBIN.NS", "SRF.NS", "MOTHERSON.NS", "SHREECEM.NS", "SIEMENS.NS", 
+        "SUNPHARMA.NS", "TCS.NS", "TATACONSUM.NS", "TATAMOTORS.NS", "TATAPOWER.NS", "TATASTEEL.NS", 
+        "TECHM.NS", "TITAN.NS", "TORNTPHARM.NS", "TRENT.NS", "TVSMOTOR.NS", "ULTRACEMCO.NS", 
+        "UPL.NS", "VEDL.NS", "WIPRO.NS", "ZOMATO.NS", "ZYDUSLIFE.NS"
     ]
     
     results = []
+    print(f"Starting Backtest on {len(nifty_100_tickers)} Nifty Stocks since 2018...\n")
 
-    print(f"Starting Backtest on {len(nifty_tickers)} Nifty Stocks since 2018...\n")
-
-    for ticker in nifty_tickers:
+    for ticker in nifty_100_tickers:
         print(f"Processing {ticker}...")
         try:
             data = download_and_prepare_data(ticker)
@@ -143,20 +166,25 @@ if __name__ == "__main__":
             bt = Backtest(data, InstitutionalBroomBreakout, cash=1000000, commission=0.001)
             stats = bt.run()
             
-            results.append({
-                "Ticker": ticker,
-                "Return [%]": round(stats['Return [%]'], 2),
-                "Max Drawdown [%]": round(stats['Max. Drawdown [%]'], 2),
-                "Win Rate [%]": round(stats['Win Rate [%]'], 2) if not np.isnan(stats['Win Rate [%]']) else 0.0,
-                "Total Trades": stats['# Trades']
-            })
+            # Only record if at least one trade was taken
+            if stats['# Trades'] > 0:
+                results.append({
+                    "Ticker": ticker,
+                    "Return [%]": round(stats['Return [%]'], 2),
+                    "Max Drawdown [%]": round(stats['Max. Drawdown [%]'], 2),
+                    "Win Rate [%]": round(stats['Win Rate [%]'], 2) if not np.isnan(stats['Win Rate [%]']) else 0.0,
+                    "Total Trades": stats['# Trades']
+                })
         except Exception as e:
             print(f"  -> Error on {ticker}: {e}")
 
     # Compile Summary
     summary_df = pd.DataFrame(results)
-    summary_df.to_csv("portfolio_summary.csv", index=False)
-    
-    print("\n=== PORTFOLIO BACKTEST COMPLETE ===")
-    print(summary_df)
-    print("\nResults saved to 'portfolio_summary.csv'")
+    if not summary_df.empty:
+        summary_df.to_csv("portfolio_summary.csv", index=False)
+        print("\n=== PORTFOLIO BACKTEST COMPLETE ===")
+        print(summary_df)
+        print(f"\nTotal Stocks Traded: {len(summary_df)}")
+        print("Results saved to 'portfolio_summary.csv'")
+    else:
+        print("\n0 Trades executed across all 100 stocks. The parameters may still be too strict.")
