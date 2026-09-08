@@ -117,7 +117,7 @@ def download_and_prepare_data(ticker="RELIANCE.NS"):
   if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
-  # Resample to Weekly and Monthly for Macro Filters
+  # Resample using modern Pandas offsets ('W' for weekly, 'ME' for month-end)
   df_weekly = df.resample("W").agg({
       "Open": "first",
       "High": "max",
@@ -125,7 +125,7 @@ def download_and_prepare_data(ticker="RELIANCE.NS"):
       "Close": "last",
       "Volume": "sum",
   })
-  df_monthly = df.resample("M").agg({
+  df_monthly = df.resample("ME").agg({
       "Open": "first",
       "High": "max",
       "Low": "min",
