@@ -1,4 +1,3 @@
-```python
 """
 Institutional Broom Breakout Backtest
 -------------------------------------
