@@ -88,68 +88,95 @@ POC_BINS = 10
 # UTILITY FUNCTIONS
 # ============================================================
 
-def calculate_poc(
-    recent_closes: pd.Series,
-    recent_volumes: pd.Series,
-    bins: int = POC_BINS,
-) -> float:
+def calculate_poc(recent_closes, recent_volumes, bins=10):
     """
     Calculate Volume Profile Point of Control (POC).
 
-    POC = price level with the highest accumulated volume.
-
-    Returns NaN when valid data is insufficient.
+    Works with both pandas Series, numpy arrays,
+    and backtesting.py _Array objects.
     """
 
-    prices = pd.to_numeric(recent_closes, errors="coerce")
-    volumes = pd.to_numeric(recent_volumes, errors="coerce")
-
-    valid = (
-        prices.notna()
-        & volumes.notna()
-        & np.isfinite(prices)
-        & np.isfinite(volumes)
-        & (volumes >= 0)
+    # Convert backtesting.py _Array objects
+    # into normal numpy arrays.
+    prices = np.asarray(
+        recent_closes,
+        dtype=float
     )
 
-    prices = prices[valid].to_numpy(dtype=float)
-    volumes = volumes[valid].to_numpy(dtype=float)
+    volumes = np.asarray(
+        recent_volumes,
+        dtype=float
+    )
+
+    # Keep only valid price-volume observations.
+    valid = (
+        np.isfinite(prices)
+        &
+        np.isfinite(volumes)
+    )
+
+    prices = prices[valid]
+    volumes = volumes[valid]
 
     if len(prices) == 0:
         return np.nan
 
-    price_min = prices.min()
-    price_max = prices.max()
+    price_min = float(
+        np.min(prices)
+    )
 
-    # If every close is identical, there is no meaningful
-    # price distribution to bin.
-    if not np.isfinite(price_min) or not np.isfinite(price_max):
-        return np.nan
+    price_max = float(
+        np.max(prices)
+    )
 
-    if price_min == price_max:
-        return float(price_min)
+    # If all prices are identical,
+    # that price itself is the POC.
+    if np.isclose(
+        price_min,
+        price_max
+    ):
+        return price_min
 
-    # np.linspace creates the price levels used for the
-    # volume profile.
+    # Create price bins.
     price_bins = np.linspace(
         price_min,
         price_max,
-        bins,
+        bins
     )
 
-    volume_by_price = np.zeros(len(price_bins), dtype=float)
+    volume_by_price = np.zeros(
+        bins,
+        dtype=float
+    )
 
-    for price, volume in zip(prices, volumes):
-        closest_bin = np.abs(price_bins - price).argmin()
-        volume_by_price[closest_bin] += volume
+    # Allocate each day's volume
+    # to its nearest price bin.
+    for price, volume in zip(
+        prices,
+        volumes
+    ):
 
-    if not np.any(volume_by_price > 0):
-        return np.nan
+        bin_index = int(
+            np.abs(
+                price_bins - price
+            ).argmin()
+        )
 
-    poc_index = int(np.argmax(volume_by_price))
+        volume_by_price[
+            bin_index
+        ] += volume
 
-    return float(price_bins[poc_index])
+    # Point of Control =
+    # price level having maximum volume.
+    poc_index = int(
+        np.argmax(
+            volume_by_price
+        )
+    )
 
+    return float(
+        price_bins[poc_index]
+    )
 
 # ============================================================
 # STRATEGY
