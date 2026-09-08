@@ -1,0 +1,6 @@
+backtesting
+pandas
+pandas-ta
+numpy
+yfinance
+bokeh==2.4.3
