@@ -3,4 +3,4 @@ pandas
 pandas-ta
 yfinance
 backtesting
-bokeh==2.4.3
+bokeh>=3.4.0
