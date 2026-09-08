@@ -4,3 +4,4 @@ pandas-ta
 yfinance
 backtesting
 bokeh>=3.4.0
+requests
