@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+env/
+
+# Data
+data_cache/
+*.csv
+*.log
+
+# State (keep minimal)
+state/*.tmp
+state/*.lock
+
+# IDE
+.vscode/
+.idea/
