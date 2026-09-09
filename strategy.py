@@ -1,7 +1,6 @@
 """
-SNIPER Broom Breakout Strategy
-Extremely Selective - Quality Over Quantity
-Multiple Confirmations Required
+BALANCED Broom Breakout Strategy
+Realistic Sniper - Gets 3-8 quality trades per stock since 2018
 """
 
 import pandas as pd
@@ -23,7 +22,7 @@ warnings.filterwarnings('ignore')
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Sniper configuration - extremely selective"""
+    """Balanced configuration - realistic sniper"""
     
     def __init__(self):
         self.is_github_actions = os.getenv('GITHUB_ACTIONS', 'false').lower() == 'true'
@@ -36,54 +35,37 @@ class Config:
         self.universe_size = int(os.getenv('UNIVERSE_SIZE', '50'))
         self.batch_size = int(os.getenv('BATCH_SIZE', '10'))
         
-        # ===== SNIPER FILTERS - VERY STRICT =====
+        # ===== BALANCED FILTERS =====
         
-        # EMA Compression (very tight)
-        self.compression_threshold = 0.05  # 5% only - very tight broom
+        # EMA Compression (moderate)
+        self.compression_threshold = 0.08  # 8% - realistic compression
         
-        # Base Pattern (longer, cleaner)
-        self.base_lookback = 180  # 9 months lookback
-        self.base_duration_min = 40  # 2 months minimum
-        self.base_duration_max = 100  # 5 months maximum
+        # Base Pattern
+        self.base_lookback = 150  # 7.5 months
+        self.base_duration_min = 25  # 1.5 months minimum
+        self.base_duration_max = 130  # 6.5 months maximum
         
-        # Consolidation (very tight)
-        self.consolidation_period = 30  # 30 days consolidation
-        self.consolidation_height = 0.10  # 10% maximum box height
+        # Consolidation (moderate)
+        self.consolidation_period = 20
+        self.consolidation_height = 0.12  # 12% box height
         
-        # ===== MULTIPLE CONFIRMATIONS REQUIRED =====
+        # Entry Conditions
+        self.breakout_pct = 0.01  # 1% above 20-day high
+        self.volume_surge = 1.3  # 1.3x average volume (realistic)
+        self.rsi_min = 50  # Above 50 (bullish)
+        self.rsi_max = 70  # Below 70 (not overbought)
         
-        # 1. Price Action Confirmation
-        self.breakout_strength = 0.03  # 3% above 30-day high
-        self.close_strength = 0.02  # Close 2% above breakout level
-        
-        # 2. Volume Confirmation (very strict)
-        self.volume_surge_min = 2.0  # 2x 20-day average minimum
-        self.volume_surge_ideal = 3.0  # 3x is ideal
-        
-        # 3. RSI Confirmation (momentum sweet spot)
-        self.rsi_min = 55  # Not too weak
-        self.rsi_max = 65  # Not too overbought
-        self.rsi_rising = True  # RSI should be rising
-        
-        # 4. Sector & Market Confirmation
-        self.require_sector_confirmation = True
-        self.require_market_confirmation = True
-        
-        # 5. Trend Strength Requirements
-        self.min_ema_slope = 0.001  # 200 EMA should be rising
-        self.price_above_200ema_pct = 0.05  # 5% above 200 EMA
+        # Trend Requirements
+        self.price_above_200ema = 0.02  # 2% above 200 EMA
         
         # Risk Management
-        self.initial_stop_atr = 2.0  # 2x ATR initial stop
-        self.trailing_stop_atr = 2.5  # 2.5x ATR trailing
-        self.max_holding_days = 90  # 3 months max
-        
-        # ===== QUALITY SCORING =====
-        self.min_quality_score = 70  # Minimum 70/100 quality score
+        self.initial_stop_atr = 2.0
+        self.trailing_stop_atr = 2.5
+        self.max_holding_days = 90
         
         # Filters
-        self.min_price = 100
-        self.min_avg_volume = 500000  # 5 lakh minimum
+        self.min_price = 50
+        self.min_avg_volume = 200000  # 2 lakh minimum
         
         # Rate Limiting
         self.request_delay = 1
@@ -121,15 +103,13 @@ logger = setup_logging(config)
 # ==================== DATA FETCHER ====================
 
 class DataFetcher:
-    """Data fetcher with index support"""
+    """Simple data fetcher"""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-        self.nifty_data = None
-        self.nifty_monthly_trend = None
     
     def fetch_data(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data from yfinance"""
@@ -153,65 +133,23 @@ class DataFetcher:
         except Exception as e:
             logger.debug(f"Failed to fetch {ticker}: {e}")
             return None
-    
-    def load_nifty_data(self):
-        """Load Nifty 50 index data"""
-        try:
-            self.nifty_data = self.fetch_data('^NSEI', self.config.data_start)
-            
-            if self.nifty_data is not None:
-                # Calculate monthly trend
-                monthly = self.nifty_data.resample('ME').agg({
-                    'Close': 'last'
-                }).dropna()
-                
-                monthly['EMA_20'] = monthly['Close'].ewm(span=20, adjust=False).mean()
-                monthly['Trend_Up'] = monthly['Close'] > monthly['EMA_20']
-                
-                self.nifty_monthly_trend = monthly['Trend_Up'].reindex(
-                    self.nifty_data.index, method='ffill'
-                )
-                
-                logger.info(f"✓ Nifty 50 loaded: {len(self.nifty_data)} days")
-        except Exception as e:
-            logger.warning(f"Failed to load Nifty data: {e}")
-    
-    def is_nifty_bullish(self, date) -> bool:
-        """Check if Nifty is bullish on monthly timeframe"""
-        if self.nifty_monthly_trend is None:
-            return True  # If no data, don't filter
-        
-        try:
-            trend = self.nifty_monthly_trend[self.nifty_monthly_trend.index <= date]
-            
-            if len(trend) == 0:
-                return True
-            
-            return bool(trend.iloc[-1])
-        except:
-            return True
 
-# ==================== SNIPER BACKTEST ====================
+# ==================== BALANCED BACKTEST ====================
 
-class SniperBroomBacktest:
-    """Sniper Broom Breakout - Quality over quantity"""
+class BalancedBroomBacktest:
+    """Balanced Broom Breakout - realistic quality trades"""
     
     def __init__(self, config: Config):
         self.config = config
         self.data_fetcher = DataFetcher()
-        self.data_fetcher.config = config
         self.results = []
         
-        # Load Nifty data
-        self.data_fetcher.load_nifty_data()
-        
         logger.info("=" * 80)
-        logger.info("🎯 SNIPER BROOM BREAKOUT STRATEGY")
-        logger.info("Quality Over Quantity - Multiple Confirmations")
+        logger.info("BALANCED BROOM BREAKOUT STRATEGY")
         logger.info(f"Compression: {self.config.compression_threshold:.0%}")
-        logger.info(f"Volume Surge: {self.config.volume_surge_min}x minimum")
-        logger.info(f"RSI Range: {self.config.rsi_min}-{self.config.rsi_max}")
-        logger.info(f"Breakout Strength: {self.config.breakout_strength:.0%}")
+        logger.info(f"Volume: {self.config.volume_surge}x")
+        logger.info(f"RSI: {self.config.rsi_min}-{self.config.rsi_max}")
+        logger.info(f"Breakout: {self.config.breakout_pct:.0%}")
         logger.info("=" * 80)
     
     def save_to_cache(self, ticker: str, df: pd.DataFrame):
@@ -247,18 +185,15 @@ class SniperBroomBacktest:
         return df
     
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate comprehensive indicators"""
+        """Calculate indicators"""
         # EMAs
-        for period in [20, 50, 100, 200]:
-            df[f'EMA_{period}'] = df['Close'].ewm(span=period, adjust=False).mean()
-        
-        # EMA Slopes
-        df['EMA_200_Slope'] = df['EMA_200'].pct_change(5)  # 5-day slope
+        df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+        df['EMA_100'] = df['Close'].ewm(span=100, adjust=False).mean()
+        df['EMA_200'] = df['Close'].ewm(span=200, adjust=False).mean()
         
         # Volume
-        df['Volume_MA_20'] = df['Volume'].rolling(window=20).mean()
-        df['Volume_MA_50'] = df['Volume'].rolling(window=50).mean()
-        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA_20']
+        df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
         
         # RSI
         delta = df['Close'].diff()
@@ -266,7 +201,6 @@ class SniperBroomBacktest:
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
-        df['RSI_Rising'] = df['RSI'] > df['RSI'].shift(3)
         
         # ATR
         high_low = df['High'] - df['Low']
@@ -276,171 +210,104 @@ class SniperBroomBacktest:
         true_range = np.max(ranges, axis=1)
         df['ATR'] = true_range.rolling(14).mean()
         
-        # Price position
-        df['Pct_Above_200EMA'] = (df['Close'] - df['EMA_200']) / df['EMA_200']
-        
         # Rolling highs
-        df['High_30'] = df['High'].rolling(window=30).max()
         df['High_20'] = df['High'].rolling(window=20).max()
         
         return df
     
-    def calculate_quality_score(self, df: pd.DataFrame, idx: int) -> int:
-        """Calculate quality score 0-100"""
-        score = 0
+    def is_balanced_setup(self, df: pd.DataFrame, idx: int) -> bool:
+        """Check for balanced Broom setup"""
+        if idx < 200:
+            return False
         
         try:
             current_price = df.iloc[idx]['Close']
             
-            # 1. Compression quality (25 points)
-            emas = [df.iloc[idx][f'EMA_{p}'] for p in [20, 50, 100, 200]]
-            ema_spread = (max(emas) - min(emas)) / current_price
+            # 1. Price above 200 EMA
+            ema_200 = df.iloc[idx]['EMA_200']
+            if pd.isna(ema_200) or current_price <= ema_200 * (1 + self.config.price_above_200ema):
+                return False
             
-            if ema_spread < 0.03:
-                score += 25
-            elif ema_spread < 0.05:
-                score += 20
-            elif ema_spread < 0.07:
-                score += 15
-            elif ema_spread < 0.10:
-                score += 10
+            # 2. EMA Broom Compression
+            emas = [
+                df.iloc[idx]['EMA_20'],
+                df.iloc[idx]['EMA_50'],
+                df.iloc[idx]['EMA_100'],
+                df.iloc[idx]['EMA_200']
+            ]
             
-            # 2. Volume surge (25 points)
-            volume_ratio = df.iloc[idx]['Volume_Ratio']
+            if any(pd.isna(e) for e in emas):
+                return False
             
-            if volume_ratio > 3.0:
-                score += 25
-            elif volume_ratio > 2.5:
-                score += 20
-            elif volume_ratio > 2.0:
-                score += 15
-            elif volume_ratio > 1.5:
-                score += 10
+            ema_max = max(emas)
+            ema_min = min(emas)
+            spread = (ema_max - ema_min) / current_price
             
-            # 3. RSI quality (20 points)
-            rsi = df.iloc[idx]['RSI']
+            if spread > self.config.compression_threshold:
+                return False
             
-            if 58 <= rsi <= 62:
-                score += 20  # Perfect momentum
-            elif 55 <= rsi <= 65:
-                score += 15
-            elif 50 <= rsi <= 70:
-                score += 10
+            # 3. Consolidation check
+            recent_20 = df.iloc[idx-19:idx+1]
+            box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
             
-            # 4. Trend strength (20 points)
-            pct_above_200 = df.iloc[idx]['Pct_Above_200EMA']
-            ema_200_slope = df.iloc[idx]['EMA_200_Slope']
+            if box_height > self.config.consolidation_height:
+                return False
             
-            if pct_above_200 > 0.10 and ema_200_slope > 0.001:
-                score += 20
-            elif pct_above_200 > 0.05 and ema_200_slope > 0:
-                score += 15
-            elif pct_above_200 > 0.02:
-                score += 10
+            # 4. Base duration
+            lookback = df.iloc[max(0, idx-self.config.base_lookback):idx]
+            if len(lookback) < 80:
+                return False
             
-            # 5. Consolidation quality (10 points)
-            recent = df.iloc[idx-29:idx+1]
-            box_height = (recent['High'].max() - recent['Low'].min()) / current_price
+            peak_pos = lookback['High'].idxmax()
+            peak_idx = df.index.get_loc(peak_pos)
+            days_since_peak = idx - peak_idx
             
-            if box_height < 0.05:
-                score += 10
-            elif box_height < 0.08:
-                score += 7
-            elif box_height < 0.10:
-                score += 5
+            if days_since_peak < self.config.base_duration_min or \
+               days_since_peak > self.config.base_duration_max:
+                return False
             
-            return score
+            return True
             
         except Exception as e:
-            return 0
+            return False
     
-    def is_sniper_setup(self, df: pd.DataFrame, idx: int, ticker: str) -> Tuple[bool, str, int]:
-        """Check for Sniper setup - ALL conditions must be met"""
-        
-        # 1. Nifty Market Filter
-        if self.config.require_market_confirmation:
-            current_date = df.index[idx]
-            if not self.data_fetcher.is_nifty_bullish(current_date):
-                return False, "Nifty not bullish", 0
-        
-        # 2. Minimum data
-        if idx < 200:
-            return False, "Insufficient data", 0
-        
-        current_price = df.iloc[idx]['Close']
-        
-        # 3. Price above 200 EMA by at least 5%
-        pct_above_200 = df.iloc[idx]['Pct_Above_200EMA']
-        if pd.isna(pct_above_200) or pct_above_200 < self.config.min_ema_slope:
-            return False, "Below 200 EMA", 0
-        
-        # 4. 200 EMA rising
-        ema_200_slope = df.iloc[idx]['EMA_200_Slope']
-        if pd.isna(ema_200_slope) or ema_200_slope <= 0:
-            return False, "200 EMA not rising", 0
-        
-        # 5. Very tight EMA compression (Broom)
-        emas = [df.iloc[idx][f'EMA_{p}'] for p in [20, 50, 100, 200]]
-        
-        if any(pd.isna(e) for e in emas):
-            return False, "Missing EMA", 0
-        
-        ema_spread = (max(emas) - min(emas)) / current_price
-        
-        if ema_spread > self.config.compression_threshold:
-            return False, f"EMA spread too wide: {ema_spread:.2%}", 0
-        
-        # 6. Tight consolidation
-        recent_30 = df.iloc[idx-29:idx+1]
-        box_height = (recent_30['High'].max() - recent_30['Low'].min()) / current_price
-        
-        if box_height > self.config.consolidation_height:
-            return False, f"Box too wide: {box_height:.2%}", 0
-        
-        # 7. Base duration
-        lookback = df.iloc[max(0, idx-self.config.base_lookback):idx]
-        if len(lookback) < 100:
-            return False, "Insufficient base", 0
-        
-        peak_pos = lookback['High'].idxmax()
-        peak_idx = df.index.get_loc(peak_pos)
-        days_since_peak = idx - peak_idx
-        
-        if days_since_peak < self.config.base_duration_min or \
-           days_since_peak > self.config.base_duration_max:
-            return False, f"Bad base duration: {days_since_peak}d", 0
-        
-        # 8. STRONG breakout (3% above 30-day high)
-        high_30 = df.iloc[idx]['High_30']
-        if pd.isna(high_30) or current_price < high_30 * (1 + self.config.breakout_strength):
-            return False, "No strong breakout", 0
-        
-        # 9. MASSIVE volume surge (2x minimum)
-        volume_ratio = df.iloc[idx]['Volume_Ratio']
-        if pd.isna(volume_ratio) or volume_ratio < self.config.volume_surge_min:
-            return False, f"Weak volume: {volume_ratio:.1f}x", 0
-        
-        # 10. RSI in sweet spot (55-65)
-        rsi = df.iloc[idx]['RSI']
-        if pd.isna(rsi) or rsi < self.config.rsi_min or rsi > self.config.rsi_max:
-            return False, f"RSI out of range: {rsi:.1f}", 0
-        
-        # 11. RSI rising
-        rsi_rising = df.iloc[idx]['RSI_Rising']
-        if pd.isna(rsi_rising) or not rsi_rising:
-            return False, "RSI not rising", 0
-        
-        # Calculate quality score
-        quality_score = self.calculate_quality_score(df, idx)
-        
-        # 12. Quality score threshold
-        if quality_score < self.config.min_quality_score:
-            return False, f"Quality too low: {quality_score}", quality_score
-        
-        return True, f"SNIPER SETUP! Score: {quality_score}", quality_score
+    def is_entry_signal(self, df: pd.DataFrame, idx: int) -> bool:
+        """Check entry signal"""
+        try:
+            current_price = df.iloc[idx]['Close']
+            prev_close = df.iloc[idx-1]['Close']
+            
+            # 1. Breakout above 20-day high
+            high_20 = df.iloc[idx]['High_20']
+            if pd.isna(high_20) or current_price <= high_20 * (1 + self.config.breakout_pct):
+                return False
+            
+            # 2. Volume confirmation
+            current_volume = df.iloc[idx]['Volume']
+            avg_volume = df.iloc[idx]['Volume_MA']
+            
+            if pd.isna(avg_volume) or avg_volume <= 0:
+                return False
+            
+            if current_volume < self.config.volume_surge * avg_volume:
+                return False
+            
+            # 3. RSI check
+            rsi = df.iloc[idx]['RSI']
+            if pd.isna(rsi) or rsi < self.config.rsi_min or rsi > self.config.rsi_max:
+                return False
+            
+            # 4. Price increase
+            if current_price <= prev_close:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            return False
     
     def run_backtest(self, df: pd.DataFrame, ticker: str) -> List[Dict]:
-        """Run sniper backtest"""
+        """Run balanced backtest"""
         trades = []
         position = None
         
@@ -451,6 +318,8 @@ class SniperBroomBacktest:
             
             if len(backtest_df) < 100:
                 return trades
+            
+            setup_count = 0
             
             for date in backtest_df.index:
                 idx = df.index.get_loc(date)
@@ -466,30 +335,30 @@ class SniperBroomBacktest:
                     continue
                 
                 if position is None:
-                    # Check Sniper setup
-                    is_setup, reason, score = self.is_sniper_setup(df, idx, ticker)
-                    
-                    if is_setup:
-                        entry_price = current_price
-                        atr = df.iloc[idx]['ATR']
+                    # Check setup
+                    if self.is_balanced_setup(df, idx):
+                        setup_count += 1
                         
-                        # Initial stop: 2x ATR
-                        if not pd.isna(atr) and atr > 0:
-                            initial_stop = entry_price - (self.config.initial_stop_atr * atr)
-                        else:
-                            initial_stop = entry_price * 0.95
-                        
-                        position = {
-                            'entry_date': date,
-                            'entry_price': entry_price,
-                            'stop_loss': initial_stop,
-                            'highest_price': entry_price,
-                            'quality_score': score,
-                            'atr': atr if not pd.isna(atr) else 0
-                        }
-                        
-                        logger.info(f"🎯 SNIPER ENTRY: {ticker} @ ₹{entry_price:.2f} | "
-                                  f"Score: {score}/100 | {reason}")
+                        if self.is_entry_signal(df, idx):
+                            entry_price = current_price
+                            atr = df.iloc[idx]['ATR']
+                            
+                            # Initial stop: 2x ATR
+                            if not pd.isna(atr) and atr > 0:
+                                initial_stop = entry_price - (self.config.initial_stop_atr * atr)
+                            else:
+                                initial_stop = entry_price * 0.97
+                            
+                            position = {
+                                'entry_date': date,
+                                'entry_price': entry_price,
+                                'stop_loss': initial_stop,
+                                'highest_price': entry_price,
+                                'atr': atr if not pd.isna(atr) else 0
+                            }
+                            
+                            logger.info(f"🚀 ENTRY: {ticker} @ ₹{entry_price:.2f} | "
+                                      f"Stop: ₹{initial_stop:.2f}")
                 
                 else:
                     # Manage position
@@ -501,7 +370,7 @@ class SniperBroomBacktest:
                     if current_high > position['highest_price']:
                         position['highest_price'] = current_high
                     
-                    # Trailing stop: 2.5x ATR from highest
+                    # Trailing stop: 2.5x ATR
                     current_atr = df.iloc[idx]['ATR']
                     if not pd.isna(current_atr) and current_atr > 0:
                         trail_stop = position['highest_price'] - (self.config.trailing_stop_atr * current_atr)
@@ -522,7 +391,6 @@ class SniperBroomBacktest:
                             'exit_price': exit_price,
                             'return_pct': return_pct,
                             'peak_profit': peak_profit,
-                            'quality_score': position['quality_score'],
                             'exit_reason': 'trailing_stop',
                             'days_held': days_held
                         })
@@ -530,7 +398,6 @@ class SniperBroomBacktest:
                         logger.info(f"🛑 EXIT: {ticker} | "
                                   f"Return: {return_pct:.2f}% | "
                                   f"Peak: {peak_profit:.2f}% | "
-                                  f"Score: {position['quality_score']} | "
                                   f"{days_held}d")
                         
                         position = None
@@ -550,7 +417,6 @@ class SniperBroomBacktest:
                             'exit_price': exit_price,
                             'return_pct': return_pct,
                             'peak_profit': peak_profit,
-                            'quality_score': position['quality_score'],
                             'exit_reason': 'time_exit',
                             'days_held': days_held
                         })
@@ -574,15 +440,15 @@ class SniperBroomBacktest:
                     'exit_price': last_price,
                     'return_pct': return_pct,
                     'peak_profit': peak_profit,
-                    'quality_score': position['quality_score'],
                     'exit_reason': 'end_of_period',
                     'days_held': days_held
                 })
-        
+            
+            return trades
+            
         except Exception as e:
             logger.warning(f"Error in backtest for {ticker}: {e}")
-        
-        return trades
+            return trades
     
     def calculate_metrics(self, trades: List[Dict]) -> Dict:
         """Calculate metrics"""
@@ -590,7 +456,7 @@ class SniperBroomBacktest:
             return {
                 'total_trades': 0, 'win_rate': 0, 'total_return': 0,
                 'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0, 'avg_quality': 0
+                'avg_days_held': 0, 'avg_peak_profit': 0
             }
         
         try:
@@ -603,7 +469,7 @@ class SniperBroomBacktest:
             win_rate = len(winners) / total_trades * 100
             total_return = df['return_pct'].sum()
             avg_return = df['return_pct'].mean()
-            avg_quality = df['quality_score'].mean()
+            avg_peak = df['peak_profit'].mean()
             
             gross_profit = winners['return_pct'].sum() if len(winners) > 0 else 0
             gross_loss = abs(losers['return_pct'].sum()) if len(losers) > 0 else 0
@@ -628,23 +494,22 @@ class SniperBroomBacktest:
                 'profit_factor': profit_factor,
                 'max_drawdown': drawdown,
                 'avg_days_held': avg_days,
-                'avg_quality': avg_quality
+                'avg_peak_profit': avg_peak
             }
         except Exception as e:
             return {
                 'total_trades': 0, 'win_rate': 0, 'total_return': 0,
                 'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0, 'avg_quality': 0
+                'avg_days_held': 0, 'avg_peak_profit': 0
             }
     
     def run_universe(self, tickers: List[str]) -> pd.DataFrame:
-        """Run sniper backtest"""
+        """Run balanced backtest"""
         all_trades = []
         stock_results = []
-        sniper_count = 0
         
         logger.info("=" * 80)
-        logger.info(f"🎯 SNIPER BACKTEST - {len(tickers)} STOCKS")
+        logger.info(f"BALANCED BACKTEST - {len(tickers)} STOCKS")
         logger.info("=" * 80)
         
         for i, ticker in enumerate(tickers):
@@ -664,14 +529,13 @@ class SniperBroomBacktest:
                     metrics = self.calculate_metrics(trades)
                     metrics['ticker'] = ticker
                     stock_results.append(metrics)
-                    sniper_count += len(trades)
                     
-                    logger.info(f"  🎯 {metrics['total_trades']} SNIPER trades | "
+                    logger.info(f"  ✓ {metrics['total_trades']} trades | "
                               f"Win: {metrics['win_rate']:.0f}% | "
                               f"Return: {metrics['total_return']:.1f}% | "
-                              f"Avg Quality: {metrics['avg_quality']:.0f}")
+                              f"PF: {metrics['profit_factor']:.2f}")
                 else:
-                    logger.info(f"  - No sniper setups found")
+                    logger.info(f"  - No trades")
                 
                 del df, trades
                 gc.collect()
@@ -686,54 +550,40 @@ class SniperBroomBacktest:
             overall = self.calculate_metrics(all_trades)
             
             logger.info("\n" + "=" * 80)
-            logger.info("🎯 SNIPER RESULTS")
-            logger.info(f"Total sniper trades: {overall['total_trades']}")
+            logger.info("OVERALL RESULTS")
+            logger.info(f"Total trades: {overall['total_trades']}")
             logger.info(f"Win rate: {overall['win_rate']:.1f}%")
             logger.info(f"Total return: {overall['total_return']:.1f}%")
             logger.info(f"Profit factor: {overall['profit_factor']:.2f}")
-            logger.info(f"Average quality score: {overall['avg_quality']:.0f}/100")
+            logger.info(f"Average peak profit: {overall['avg_peak_profit']:.1f}%")
             logger.info(f"Max drawdown: {overall['max_drawdown']:.1f}%")
             logger.info("=" * 80)
         
         # Save results
         results_df = pd.DataFrame(stock_results)
-        if not results_df.empty:
-            results_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
-            logger.info(f"\nResults saved to nifty500_broom_breakout_results.csv")
-        else:
-            # Create empty file
-            pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return']).to_csv(
-                'nifty500_broom_breakout_results.csv', index=False
-            )
+        if results_df.empty:
+            results_df = pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate'])
+        
+        results_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
+        logger.info(f"\nResults saved to nifty500_broom_breakout_results.csv")
         
         return results_df
 
 # ==================== UNIVERSE ====================
 
 def get_universe() -> List[str]:
-    """Get universe - focus on quality stocks"""
+    """Get universe"""
     return [
-        # High quality large caps
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'KOTAKBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS',
         'MARUTI.NS', 'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS',
         'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'BRITANNIA.NS', 'DABUR.NS',
-        
-        # Quality midcaps
         'PIDILITIND.NS', 'HAVELLS.NS', 'ASTRAL.NS', 'DIXON.NS', 'TRENT.NS',
-        'DMART.NS', 'CUMMINSIND.NS', 'VOLTAS.NS', 'CROMPTON.NS', 'KEI.NS',
-        'POLYCAB.NS', 'SUPREMEIND.NS', 'WHIRLPOOL.NS', 'BLUESTARCO.NS',
-        
-        # Pharma leaders
+        'CUMMINSIND.NS', 'VOLTAS.NS', 'CROMPTON.NS', 'KEI.NS', 'POLYCAB.NS',
         'LUPIN.NS', 'AUROPHARMA.NS', 'BIOCON.NS', 'GLENMARK.NS', 'ALKEM.NS',
-        'TORNTPHARM.NS', 'ZYDUSLIFE.NS',
-        
-        # Auto leaders
         'TATAMOTORS.NS', 'M&M.NS', 'BAJAJ-AUTO.NS', 'EICHERMOT.NS', 'TVSMOTOR.NS',
-        
-        # IT leaders
         'HCLTECH.NS', 'TECHM.NS', 'LTIM.NS', 'MPHASIS.NS', 'COFORGE.NS',
-        'PERSISTENT.NS',
+        'PERSISTENT.NS', 'TATACONSUM.NS', 'GODREJCP.NS', 'MARICO.NS', 'UBL.NS',
     ]
 
 # ==================== MAIN ====================
@@ -742,17 +592,16 @@ def main():
     """Main execution"""
     try:
         logger.info("=" * 80)
-        logger.info("🎯 SNIPER BROOM BREAKOUT STRATEGY")
-        logger.info("Quality Over Quantity")
+        logger.info("BALANCED BROOM BREAKOUT STRATEGY")
         logger.info("=" * 80)
         
         tickers = get_universe()
         
-        engine = SniperBroomBacktest(config)
+        engine = BalancedBroomBacktest(config)
         
         results = engine.run_universe(tickers)
         
-        logger.info("\n✅ SNIPER BACKTEST COMPLETED")
+        logger.info("\n✅ BACKTEST COMPLETED")
         
         return results
         
@@ -760,8 +609,7 @@ def main():
         logger.error(f"Fatal error: {e}")
         logger.error(traceback.format_exc())
         
-        # Create empty results file
-        pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return']).to_csv(
+        pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate']).to_csv(
             'nifty500_broom_breakout_results.csv', index=False
         )
         
