@@ -1,22 +1,20 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
-For Nifty 500 Universe - Enhanced Version with Robust Error Handling
+For Nifty 500 Universe - Version with Alternative Data Sources
 """
 
 import pandas as pd
 import numpy as np
-import yfinance as yf
-from datetime import datetime, timedelta
 import warnings
 import gc
 import time
+import logging
+import os
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import logging
-from typing import Optional, Dict, List
-import json
-import os
 
 warnings.filterwarnings('ignore')
 
@@ -31,114 +29,245 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class RobustDataFetcher:
-    """Enhanced data fetching with retry logic and error handling"""
+class DataFetcher:
+    """Multi-source data fetcher with fallback mechanisms"""
     
-    def __init__(self, max_retries=3, retry_delay=2):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+    def __init__(self):
         self.session = self._create_session()
+        self.rate_limit_hits = 0
+        self.consecutive_failures = 0
         
     def _create_session(self):
-        """Create a session with retry strategy"""
+        """Create session with retry strategy"""
         session = requests.Session()
         retry_strategy = Retry(
-            total=5,
-            backoff_factor=1,
+            total=2,
+            backoff_factor=0.5,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "OPTIONS"]
         )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=1, pool_maxsize=1)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
+        
+        # Set headers to mimic browser
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json,text/plain,*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': 'https://finance.yahoo.com',
+            'Referer': 'https://finance.yahoo.com/',
+        })
         return session
     
-    def fetch_with_retry(self, ticker: str, start_date: str, end_date: Optional[str] = None) -> Optional[pd.DataFrame]:
-        """Fetch data with exponential backoff retry"""
-        if end_date is None:
-            end_date = datetime.now().strftime('%Y-%m-%d')
-        
-        for attempt in range(self.max_retries):
-            try:
-                # Add delay between attempts
-                if attempt > 0:
-                    wait_time = self.retry_delay * (2 ** (attempt - 1))  # Exponential backoff
-                    logger.info(f"Retry {attempt} for {ticker} after {wait_time} seconds")
-                    time.sleep(wait_time)
-                
-                # Use yfinance with custom session
-                stock = yf.Ticker(ticker, session=self.session)
-                df = stock.history(
-                    start=start_date,
-                    end=end_date,
-                    auto_adjust=True,
-                    timeout=30
-                )
-                
-                if df is None or df.empty:
-                    logger.warning(f"No data returned for {ticker} on attempt {attempt + 1}")
-                    continue
-                
-                # Validate data
-                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                if not all(col in df.columns for col in required_columns):
-                    logger.warning(f"Missing columns for {ticker}")
-                    continue
-                
-                # Clean data
-                df = df[required_columns].copy()
-                df = df.dropna()
-                
-                if len(df) < 100:  # Minimum data requirement
-                    logger.warning(f"Insufficient data for {ticker}: {len(df)} rows")
-                    return None
-                
-                logger.info(f"Successfully fetched {len(df)} rows for {ticker}")
-                return df
-                
-            except Exception as e:
-                error_str = str(e)
-                if "429" in error_str or "rate limit" in error_str.lower():
-                    logger.warning(f"Rate limited for {ticker} (attempt {attempt + 1})")
-                elif "404" in error_str:
-                    logger.error(f"Ticker {ticker} not found")
-                    return None
-                else:
-                    logger.error(f"Error fetching {ticker} (attempt {attempt + 1}): {error_str}")
-                
-                if attempt == self.max_retries - 1:
-                    return None
-        
-        return None
-    
-    def fetch_with_alternative_sources(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
-        """Try alternative data sources if Yahoo Finance fails"""
-        # Try different Yahoo Finance ticker formats
-        alternative_formats = []
-        
-        if ticker.endswith('.NS'):
-            # Try without suffix
-            alternative_formats.append(ticker.replace('.NS', ''))
-            # Try with .BO suffix
-            alternative_formats.append(ticker.replace('.NS', '.BO'))
-        elif ticker.endswith('.BO'):
-            alternative_formats.append(ticker.replace('.BO', '.NS'))
-            alternative_formats.append(ticker.replace('.BO', ''))
-        else:
-            alternative_formats.append(f"{ticker}.NS")
-            alternative_formats.append(f"{ticker}.BO")
-        
-        for alt_ticker in alternative_formats:
-            logger.info(f"Trying alternative ticker format: {alt_ticker}")
-            df = self.fetch_with_retry(alt_ticker, start_date)
+    def fetch_from_yfinance(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Fetch data from yfinance with enhanced error handling"""
+        try:
+            import yfinance as yf
+            
+            # Create ticker object with custom session
+            stock = yf.Ticker(ticker, session=self.session)
+            
+            # Try to get history
+            df = stock.history(
+                start=start_date,
+                end=datetime.now().strftime('%Y-%m-%d'),
+                auto_adjust=False,
+                timeout=15
+            )
+            
             if df is not None and not df.empty:
-                logger.info(f"Successfully fetched data using {alt_ticker}")
-                return df
+                # Ensure required columns exist
+                required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                if all(col in df.columns for col in required_cols):
+                    return df[required_cols].copy()
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"yfinance failed for {ticker}: {str(e)}")
+            return None
+    
+    def fetch_from_stooq(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Fetch data from Stooq (free alternative)"""
+        try:
+            # Convert ticker format for Stooq
+            # Stooq uses different format for Indian stocks
+            if ticker.endswith('.NS'):
+                stooq_ticker = ticker.replace('.NS', '.NSE')
+            elif ticker.endswith('.BO'):
+                stooq_ticker = ticker.replace('.BO', '.BSE')
+            else:
+                stooq_ticker = ticker + '.NSE'
+            
+            # Stooq URL format
+            url = f"https://stooq.com/q/d/l/?s={stooq_ticker.lower()}&d1={start_date.replace('-', '')}&d2={datetime.now().strftime('%Y%m%d')}&i=d"
+            
+            response = self.session.get(url, timeout=15)
+            
+            if response.status_code == 200:
+                df = pd.read_csv(pd.StringIO(response.text))
+                
+                if not df.empty and 'Close' in df.columns:
+                    # Convert to standard format
+                    df['Date'] = pd.to_datetime(df['Date'])
+                    df.set_index('Date', inplace=True)
+                    
+                    # Ensure required columns
+                    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    if all(col in df.columns for col in required_cols):
+                        # Convert volume to int
+                        df['Volume'] = df['Volume'].astype(float)
+                        return df[required_cols]
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Stooq failed for {ticker}: {str(e)}")
+            return None
+    
+    def fetch_from_alpha_vantage(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Fetch from Alpha Vantage (requires API key)"""
+        # Note: Alpha Vantage requires API key
+        # You can get free key from https://www.alphavantage.co/support/#api-key
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'demo')
+        
+        try:
+            # Convert ticker format
+            if ticker.endswith('.NS'):
+                av_ticker = ticker.replace('.NS', '.BSE')  # Alpha Vantage uses BSE for Indian stocks
+            else:
+                av_ticker = ticker
+            
+            url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={av_ticker}&outputsize=full&apikey={api_key}"
+            
+            response = self.session.get(url, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if 'Time Series (Daily)' in data:
+                    df = pd.DataFrame.from_dict(data['Time Series (Daily)'], orient='index')
+                    df.index = pd.to_datetime(df.index)
+                    df.sort_index(inplace=True)
+                    
+                    # Convert columns
+                    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    df = df.astype(float)
+                    
+                    # Filter to start date
+                    df = df[df.index >= start_date]
+                    
+                    return df
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Alpha Vantage failed for {ticker}: {str(e)}")
+            return None
+    
+    def fetch_from_nse_india(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Fetch from NSE India directly"""
+        try:
+            # NSE symbol (remove .NS suffix)
+            nse_symbol = ticker.replace('.NS', '')
+            
+            # NSE API endpoint
+            url = f"https://www.nseindia.com/api/historical/cm/equity?symbol={nse_symbol}&series=[%22EQ%22]&from={start_date}&to={datetime.now().strftime('%d-%m-%Y')}"
+            
+            # NSE requires cookies and specific headers
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json,text/plain,*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.nseindia.com/',
+            }
+            
+            # First get cookies
+            session = requests.Session()
+            session.headers.update(headers)
+            session.get('https://www.nseindia.com/', timeout=15)
+            
+            # Then fetch data
+            response = session.get(url, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if 'data' in data:
+                    df = pd.DataFrame(data['data'])
+                    df['Date'] = pd.to_datetime(df['CH_TIMESTAMP'])
+                    df.set_index('Date', inplace=True)
+                    
+                    # Map columns
+                    column_mapping = {
+                        'CH_OPENING_PRICE': 'Open',
+                        'CH_TRADE_HIGH_PRICE': 'High',
+                        'CH_TRADE_LOW_PRICE': 'Low',
+                        'CH_CLOSING_PRICE': 'Close',
+                        'CH_TOT_TRADED_QTY': 'Volume'
+                    }
+                    
+                    df = df.rename(columns=column_mapping)
+                    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].astype(float)
+                    df.sort_index(inplace=True)
+                    
+                    return df
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"NSE India failed for {ticker}: {str(e)}")
+            return None
+    
+    def fetch_with_fallback(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Fetch data with multiple source fallback"""
+        
+        # Check if we're being rate limited
+        if self.rate_limit_hits >= 3:
+            logger.warning("Multiple rate limit hits detected. Waiting 60 seconds...")
+            time.sleep(60)
+            self.rate_limit_hits = 0
+        
+        # Try each data source in order
+        data_sources = [
+            ('yfinance', self.fetch_from_yfinance),
+            ('stooq', self.fetch_from_stooq),
+            ('nse_india', self.fetch_from_nse_india),
+        ]
+        
+        for source_name, fetch_func in data_sources:
+            try:
+                logger.info(f"Trying {source_name} for {ticker}")
+                df = fetch_func(ticker, start_date)
+                
+                if df is not None and not df.empty and len(df) > 100:
+                    logger.info(f"Successfully fetched {len(df)} rows from {source_name}")
+                    self.consecutive_failures = 0
+                    return df
+                else:
+                    logger.warning(f"{source_name} returned insufficient data for {ticker}")
+                    
+            except Exception as e:
+                logger.error(f"Error with {source_name} for {ticker}: {str(e)}")
+                
+                if "429" in str(e):
+                    self.rate_limit_hits += 1
+        
+        # All sources failed
+        self.consecutive_failures += 1
+        
+        # If too many consecutive failures, wait longer
+        if self.consecutive_failures >= 5:
+            logger.warning(f"{self.consecutive_failures} consecutive failures. Waiting 120 seconds...")
+            time.sleep(120)
+            self.consecutive_failures = 0
         
         return None
 
 
 class BroomBreakoutBacktest:
+    """Main backtesting engine"""
+    
     def __init__(self, data_dir='data_cache'):
         # Strategy Parameters
         self.ema_periods = [20, 50, 100, 200]
@@ -146,19 +275,19 @@ class BroomBreakoutBacktest:
         self.monthly_ema_period = 200
         
         # Broom Setup Parameters
-        self.broom_compression_threshold = 0.08  # 8% spread
-        self.base_lookback_period = 200  # Trading days
-        self.base_duration_min = 63  # Minimum 3 months
-        self.base_duration_max = 147  # Maximum 7 months
-        self.box_consolidation_height = 0.15  # 15% height
-        self.prior_trend_exhaustion_limit = 0.60  # 60% max run-up
+        self.broom_compression_threshold = 0.08
+        self.base_lookback_period = 200
+        self.base_duration_min = 63
+        self.base_duration_max = 147
+        self.box_consolidation_height = 0.15
+        self.prior_trend_exhaustion_limit = 0.60
         
         # Execution Parameters
         self.volume_poc_bins = 10
-        self.poc_lookback = 20  # Trading days
+        self.poc_lookback = 20
         self.volume_threshold_multiplier = 1.5
         self.volume_ma_period = 50
-        self.stop_loss_buffer = 0.015  # 1.5% below 200 EMA
+        self.stop_loss_buffer = 0.015
         self.measured_move_multiplier = 2
         
         # Backtest Period
@@ -173,26 +302,26 @@ class BroomBreakoutBacktest:
         self.results = []
         
         # Initialize data fetcher
-        self.data_fetcher = RobustDataFetcher()
+        self.data_fetcher = DataFetcher()
     
     def save_to_cache(self, ticker: str, df: pd.DataFrame):
-        """Save data to local cache"""
-        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.parquet")
+        """Save data to CSV cache"""
+        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.csv")
         try:
-            df.to_parquet(cache_file)
+            df.to_csv(cache_file)
             logger.info(f"Cached data for {ticker}")
         except Exception as e:
             logger.warning(f"Failed to cache data for {ticker}: {e}")
     
     def load_from_cache(self, ticker: str) -> Optional[pd.DataFrame]:
-        """Load data from local cache"""
-        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.parquet")
+        """Load data from cache"""
+        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.csv")
         if os.path.exists(cache_file):
             try:
-                df = pd.read_parquet(cache_file)
-                # Check if cache is recent (less than 7 days old)
+                df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                # Check if cache is recent (less than 3 days old)
                 file_age = time.time() - os.path.getmtime(cache_file)
-                if file_age < 7 * 24 * 3600:  # 7 days
+                if file_age < 3 * 24 * 3600:
                     logger.info(f"Loaded cached data for {ticker}")
                     return df
                 else:
@@ -203,62 +332,49 @@ class BroomBreakoutBacktest:
     
     def download_data(self, ticker: str) -> Optional[pd.DataFrame]:
         """Download historical data with caching"""
-        # Try loading from cache first
+        # Try cache first
         df = self.load_from_cache(ticker)
         if df is not None:
             return df
         
-        # Fetch from Yahoo Finance
-        df = self.data_fetcher.fetch_with_retry(ticker, self.data_start)
+        # Fetch from data sources
+        df = self.data_fetcher.fetch_with_fallback(ticker, self.data_start)
         
-        # Try alternative sources if primary fails
-        if df is None:
-            logger.warning(f"Primary fetch failed for {ticker}, trying alternatives")
-            df = self.data_fetcher.fetch_with_alternative_sources(ticker, self.data_start)
-        
-        # Cache the data if successful
+        # Cache if successful
         if df is not None and not df.empty:
             self.save_to_cache(ticker, df)
         
         return df
     
     def calculate_emas(self, df):
-        """Calculate EMAs at different timeframes"""
-        # Daily EMAs
+        """Calculate EMAs"""
         for period in self.ema_periods:
             df[f'EMA_{period}'] = df['Close'].ewm(span=period, adjust=False).mean()
-        
         return df
     
     def create_higher_timeframes(self, df):
-        """Create weekly and monthly dataframes and calculate their EMAs"""
-        # Weekly resampling
+        """Create weekly and monthly timeframes"""
+        # Weekly
         weekly_df = df.resample('W-FRI').agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
+            'Open': 'first', 'High': 'max', 'Low': 'min',
+            'Close': 'last', 'Volume': 'sum'
         }).dropna()
         
         weekly_df[f'EMA_{self.weekly_ema_period}_Weekly'] = weekly_df['Close'].ewm(
             span=self.weekly_ema_period, adjust=False
         ).mean()
         
-        # Monthly resampling
+        # Monthly
         monthly_df = df.resample('ME').agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
+            'Open': 'first', 'High': 'max', 'Low': 'min',
+            'Close': 'last', 'Volume': 'sum'
         }).dropna()
         
         monthly_df[f'EMA_{self.monthly_ema_period}_Monthly'] = monthly_df['Close'].ewm(
             span=self.monthly_ema_period, adjust=False
         ).mean()
         
-        # Map back to daily using forward fill
+        # Map back to daily
         df['Weekly_200_EMA'] = weekly_df[f'EMA_{self.weekly_ema_period}_Weekly'].reindex(
             df.index, method='ffill'
         )
@@ -269,7 +385,7 @@ class BroomBreakoutBacktest:
         return df
     
     def check_broom_setup(self, df, idx):
-        """Check if all broom setup conditions are met"""
+        """Check broom setup conditions"""
         if idx < self.base_lookback_period:
             return False
         
@@ -278,13 +394,11 @@ class BroomBreakoutBacktest:
             return False
         
         # 1. Macro Trend Filter
-        # Daily Close above Weekly 200 EMA
         if pd.isna(df.loc[idx, 'Weekly_200_EMA']):
             return False
         if current_price <= df.loc[idx, 'Weekly_200_EMA']:
             return False
         
-        # Daily Close above Monthly 200 EMA (if available)
         if not pd.isna(df.loc[idx, 'Monthly_200_EMA']):
             if current_price <= df.loc[idx, 'Monthly_200_EMA']:
                 return False
@@ -317,15 +431,14 @@ class BroomBreakoutBacktest:
         if days_since_peak < self.base_duration_min or days_since_peak > self.base_duration_max:
             return False
         
-        # 4. Flat Box Consolidation (last 20 days)
+        # 4. Flat Box Consolidation
         recent_20 = df.iloc[idx-19:idx+1]
         box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
         
         if box_height >= self.box_consolidation_height:
             return False
         
-        # 5. Prior Trend Exhaustion Limit
-        # Find lowest low before peak
+        # 5. Prior Trend Exhaustion
         pre_peak_data = df.iloc[max(0, peak_position - self.base_lookback_period):peak_position+1]
         if len(pre_peak_data) > 0:
             lowest_low = pre_peak_data['Low'].min()
@@ -337,22 +450,16 @@ class BroomBreakoutBacktest:
         return True
     
     def calculate_volume_profile_poc(self, df, idx):
-        """Calculate Volume Profile Point of Control (POC)"""
+        """Calculate Volume Profile POC"""
         if idx < self.poc_lookback:
             return None
         
-        # Get last 20 days of data
         recent_data = df.iloc[idx - self.poc_lookback + 1:idx + 1]
-        
-        # Create price bins
         price_range = recent_data['High'].max() - recent_data['Low'].min()
         if price_range == 0:
             return None
-            
-        bin_size = price_range / self.volume_poc_bins
-        bins = np.linspace(recent_data['Low'].min(), recent_data['High'].max(), self.volume_poc_bins + 1)
         
-        # Calculate volume in each bin
+        bins = np.linspace(recent_data['Low'].min(), recent_data['High'].max(), self.volume_poc_bins + 1)
         volume_by_bin = np.zeros(self.volume_poc_bins)
         
         for i in range(len(recent_data)):
@@ -361,13 +468,11 @@ class BroomBreakoutBacktest:
             price_high = row['High']
             volume = row['Volume']
             
-            # Distribute volume across price range
             if price_high > price_low:
                 for j in range(self.volume_poc_bins):
                     bin_low = bins[j]
                     bin_high = bins[j + 1]
                     
-                    # Calculate overlap
                     overlap_low = max(price_low, bin_low)
                     overlap_high = min(price_high, bin_high)
                     
@@ -375,32 +480,27 @@ class BroomBreakoutBacktest:
                         overlap_percentage = (overlap_high - overlap_low) / (price_high - price_low)
                         volume_by_bin[j] += volume * overlap_percentage
         
-        # Find POC (bin with highest volume)
         poc_bin_idx = np.argmax(volume_by_bin)
         poc_price = (bins[poc_bin_idx] + bins[poc_bin_idx + 1]) / 2
         
         return poc_price
     
     def check_entry_signal(self, df, idx):
-        """Check for entry trigger conditions"""
+        """Check entry trigger conditions"""
         current_price = df.loc[idx, 'Close']
         
-        # Get highest EMA
         ema_values = [df.loc[idx, f'EMA_{period}'] for period in self.ema_periods]
         highest_ema = max(ema_values)
         
-        # Calculate Volume Profile POC
         poc_price = self.calculate_volume_profile_poc(df, idx)
         if poc_price is None:
             return False
         
-        # Check breakout conditions
         if current_price <= highest_ema:
             return False
         if current_price <= poc_price:
             return False
         
-        # Volume confirmation
         if idx < self.volume_ma_period:
             return False
         
@@ -412,81 +512,51 @@ class BroomBreakoutBacktest:
         
         return True
     
-    def calculate_stop_loss(self, df, idx, entry_price):
-        """Calculate initial and trailing stop loss"""
-        ema_200 = df.loc[idx, 'EMA_200']
-        stop_loss = ema_200 * (1 - self.stop_loss_buffer)
-        
-        return stop_loss
-    
-    def calculate_take_profit(self, df, idx, entry_price):
-        """Calculate take profit using measured move"""
-        # Find base setup parameters
-        lookback_data = df.iloc[max(0, idx - self.base_lookback_period):idx]
-        peak_idx = lookback_data['High'].idxmax()
-        peak_price = lookback_data['High'].max()
-        peak_position = df.index.get_loc(peak_idx)
-        
-        # Find lowest price during consolidation
-        consolidation_data = df.iloc[peak_position:idx+1]
-        lowest_consolidation_price = consolidation_data['Low'].min()
-        
-        # Calculate base depth
-        base_depth = peak_price - lowest_consolidation_price
-        
-        # Calculate take profit
-        take_profit = entry_price + (self.measured_move_multiplier * base_depth)
-        
-        return take_profit, base_depth
-    
     def run_backtest(self, df):
-        """Run the backtest on a single stock"""
+        """Run backtest on single stock"""
         trades = []
         position = None
         
-        # Calculate indicators
         df = self.calculate_emas(df)
         df = self.create_higher_timeframes(df)
         
-        # Slice to backtest period
         backtest_df = df[df.index >= self.backtest_start].copy()
         
         if len(backtest_df) < 50:
             return trades
         
-        # Iterate through backtest period
         for idx in backtest_df.index:
             position_idx = df.index.get_loc(idx)
             
             if position is None:
-                # Check for setup and entry
                 if self.check_broom_setup(df, position_idx):
                     if self.check_entry_signal(df, position_idx):
                         entry_price = df.loc[idx, 'Close']
-                        stop_loss = self.calculate_stop_loss(df, position_idx, entry_price)
-                        take_profit, base_depth = self.calculate_take_profit(
-                            df, position_idx, entry_price
-                        )
+                        stop_loss = df.loc[idx, 'EMA_200'] * (1 - self.stop_loss_buffer)
+                        
+                        # Calculate take profit
+                        lookback_data = df.iloc[max(0, position_idx - self.base_lookback_period):position_idx]
+                        peak_price = lookback_data['High'].max()
+                        peak_pos = df.index.get_loc(lookback_data['High'].idxmax())
+                        consolidation_data = df.iloc[peak_pos:position_idx+1]
+                        lowest_price = consolidation_data['Low'].min()
+                        base_depth = peak_price - lowest_price
+                        take_profit = entry_price + (self.measured_move_multiplier * base_depth)
                         
                         position = {
                             'entry_date': idx,
                             'entry_price': entry_price,
                             'stop_loss': stop_loss,
                             'take_profit': take_profit,
-                            'base_depth': base_depth,
-                            'initial_stop': stop_loss
+                            'base_depth': base_depth
                         }
-                        
-                        logger.info(f"Entry signal for {idx.date()}: Price={entry_price:.2f}, "
-                                  f"Stop={stop_loss:.2f}, Target={take_profit:.2f}")
             else:
-                # Manage existing position
                 current_price = df.loc[idx, 'Close']
                 current_high = df.loc[idx, 'High']
                 current_low = df.loc[idx, 'Low']
                 ema_200 = df.loc[idx, 'EMA_200']
                 
-                # Update trailing stop based on rising EMA
+                # Update trailing stop
                 new_stop = ema_200 * (1 - self.stop_loss_buffer)
                 if new_stop > position['stop_loss']:
                     position['stop_loss'] = new_stop
@@ -500,10 +570,8 @@ class BroomBreakoutBacktest:
                         'entry_price': position['entry_price'],
                         'exit_price': exit_price,
                         'return_pct': (exit_price - position['entry_price']) / position['entry_price'] * 100,
-                        'exit_reason': 'stop_loss',
-                        'base_depth': position['base_depth']
+                        'exit_reason': 'stop_loss'
                     })
-                    logger.info(f"Exit (Stop Loss) for {idx.date()}: Return={trades[-1]['return_pct']:.2f}%")
                     position = None
                     continue
                 
@@ -516,13 +584,11 @@ class BroomBreakoutBacktest:
                         'entry_price': position['entry_price'],
                         'exit_price': exit_price,
                         'return_pct': (exit_price - position['entry_price']) / position['entry_price'] * 100,
-                        'exit_reason': 'take_profit',
-                        'base_depth': position['base_depth']
+                        'exit_reason': 'take_profit'
                     })
-                    logger.info(f"Exit (Take Profit) for {idx.date()}: Return={trades[-1]['return_pct']:.2f}%")
                     position = None
         
-        # Close any open position at the end
+        # Close open position
         if position is not None:
             last_idx = backtest_df.index[-1]
             last_price = backtest_df.loc[last_idx, 'Close']
@@ -532,51 +598,39 @@ class BroomBreakoutBacktest:
                 'entry_price': position['entry_price'],
                 'exit_price': last_price,
                 'return_pct': (last_price - position['entry_price']) / position['entry_price'] * 100,
-                'exit_reason': 'end_of_period',
-                'base_depth': position['base_depth']
+                'exit_reason': 'end_of_period'
             })
         
         return trades
     
-    def calculate_performance_metrics(self, df, trades):
-        """Calculate performance metrics for a stock"""
+    def calculate_performance_metrics(self, trades):
+        """Calculate performance metrics"""
         if not trades:
             return {
-                'total_trades': 0,
-                'win_rate': 0,
-                'total_return': 0,
-                'max_drawdown': 0,
-                'avg_return_per_trade': 0,
-                'profit_factor': 0
+                'total_trades': 0, 'win_rate': 0, 'total_return': 0,
+                'max_drawdown': 0, 'avg_return_per_trade': 0, 'profit_factor': 0
             }
         
-        # Convert trades to DataFrame
         trades_df = pd.DataFrame(trades)
-        
-        # Basic metrics
         total_trades = len(trades_df)
         winning_trades = len(trades_df[trades_df['return_pct'] > 0])
         win_rate = (winning_trades / total_trades) * 100
         
-        # Calculate equity curve
-        backtest_df = df[df.index >= self.backtest_start].copy()
-        equity = pd.Series(index=backtest_df.index, data=100.0)  # Start with 100
-        current_equity = 100.0
+        # Calculate returns
+        cumulative_return = 100.0
+        equity_curve = [100.0]
         
         for _, trade in trades_df.iterrows():
             trade_return = trade['return_pct'] / 100
-            current_equity *= (1 + trade_return)
-            if trade['exit_date'] in equity.index:
-                equity[trade['exit_date']] = current_equity
+            cumulative_return *= (1 + trade_return)
+            equity_curve.append(cumulative_return)
         
-        # Forward fill equity curve
-        equity = equity.ffill()
+        total_return = (cumulative_return - 100)
         
-        # Calculate metrics
-        total_return = (current_equity - 100) / 100 * 100
-        max_drawdown = ((equity.cummax() - equity) / equity.cummax()).max() * 100
+        # Calculate drawdown
+        equity_series = pd.Series(equity_curve)
+        drawdown = ((equity_series.cummax() - equity_series) / equity_series.cummax()).max() * 100
         
-        # Average return per trade
         avg_return_per_trade = trades_df['return_pct'].mean()
         
         # Profit factor
@@ -588,142 +642,109 @@ class BroomBreakoutBacktest:
             'total_trades': total_trades,
             'win_rate': win_rate,
             'total_return': total_return,
-            'max_drawdown': max_drawdown,
+            'max_drawdown': drawdown,
             'avg_return_per_trade': avg_return_per_trade,
             'profit_factor': profit_factor
         }
     
-    def run_universe_backtest(self, ticker_list, batch_size=10):
-        """Run backtest for entire universe with batching"""
-        print(f"Starting backtest for {len(ticker_list)} stocks...")
+    def run_universe_backtest(self, ticker_list, start_idx=0, end_idx=None):
+        """Run backtest for universe"""
+        if end_idx is None:
+            end_idx = len(ticker_list)
+        
+        print(f"Starting backtest for {end_idx - start_idx} stocks...")
         print(f"Backtest period: {self.backtest_start} to present")
         print("-" * 80)
         
         start_time = time.time()
         processed_count = 0
-        failed_count = 0
         
-        # Process in batches
-        for batch_start in range(0, len(ticker_list), batch_size):
-            batch_end = min(batch_start + batch_size, len(ticker_list))
-            batch = ticker_list[batch_start:batch_end]
+        for i in range(start_idx, min(end_idx, len(ticker_list))):
+            ticker = ticker_list[i]
             
-            logger.info(f"Processing batch {batch_start//batch_size + 1}: stocks {batch_start+1}-{batch_end}")
-            
-            for i, ticker in enumerate(batch):
-                global_idx = batch_start + i
-                try:
-                    print(f"[{global_idx+1}/{len(ticker_list)}] Processing {ticker}...")
-                    
-                    # Download data
-                    df = self.download_data(ticker)
-                    if df is None or len(df) < 300:
-                        print(f"  Skipping {ticker}: insufficient data")
-                        self.results.append({
-                            'ticker': ticker,
-                            'total_trades': 0,
-                            'win_rate': 0,
-                            'total_return': 0,
-                            'max_drawdown': 0,
-                            'avg_return_per_trade': 0,
-                            'profit_factor': 0,
-                            'processed': False,
-                            'reason': 'insufficient_data'
-                        })
-                        failed_count += 1
-                        continue
-                    
-                    # Run backtest
-                    trades = self.run_backtest(df)
-                    
-                    # Calculate metrics
-                    metrics = self.calculate_performance_metrics(df, trades)
-                    metrics['ticker'] = ticker
-                    metrics['processed'] = True
-                    metrics['reason'] = 'success'
-                    
-                    self.results.append(metrics)
-                    processed_count += 1
-                    
-                    # Print interim results
-                    if trades:
-                        print(f"  Trades: {metrics['total_trades']}, "
-                              f"Win Rate: {metrics['win_rate']:.1f}%, "
-                              f"Return: {metrics['total_return']:.1f}%")
-                    else:
-                        print(f"  No trades generated")
-                    
-                    # Clear memory
-                    del df
-                    del trades
-                    gc.collect()
-                    
-                    # Add delay between stocks
-                    time.sleep(1)  # 1 second delay
-                    
-                except Exception as e:
-                    logger.error(f"Error processing {ticker}: {str(e)}", exc_info=True)
-                    print(f"  Error processing {ticker}: {str(e)}")
+            try:
+                print(f"[{i+1}/{end_idx}] Processing {ticker}...")
+                
+                # Download data
+                df = self.download_data(ticker)
+                
+                if df is None or len(df) < 300:
+                    print(f"  Skipping {ticker}: insufficient data")
                     self.results.append({
                         'ticker': ticker,
-                        'total_trades': 0,
-                        'win_rate': 0,
-                        'total_return': 0,
-                        'max_drawdown': 0,
-                        'avg_return_per_trade': 0,
-                        'profit_factor': 0,
-                        'processed': False,
-                        'reason': f'error: {str(e)}'
+                        'total_trades': 0, 'win_rate': 0, 'total_return': 0,
+                        'max_drawdown': 0, 'avg_return_per_trade': 0,
+                        'profit_factor': 0, 'processed': False,
+                        'reason': 'insufficient_data'
                     })
-                    failed_count += 1
-            
-            # Add longer delay between batches
-            if batch_end < len(ticker_list):
-                logger.info(f"Batch complete. Waiting 5 seconds before next batch...")
-                time.sleep(5)
+                    continue
+                
+                # Run backtest
+                trades = self.run_backtest(df)
+                
+                # Calculate metrics
+                metrics = self.calculate_performance_metrics(trades)
+                metrics['ticker'] = ticker
+                metrics['processed'] = True
+                metrics['reason'] = 'success'
+                
+                self.results.append(metrics)
+                processed_count += 1
+                
+                # Print results
+                if trades:
+                    print(f"  Trades: {metrics['total_trades']}, "
+                          f"Win Rate: {metrics['win_rate']:.1f}%, "
+                          f"Return: {metrics['total_return']:.1f}%")
+                else:
+                    print(f"  No trades generated")
+                
+                # Clear memory
+                del df, trades
+                gc.collect()
+                
+                # Add delay
+                time.sleep(2)  # 2 seconds between stocks
+                
+            except Exception as e:
+                logger.error(f"Error processing {ticker}: {str(e)}")
+                self.results.append({
+                    'ticker': ticker,
+                    'total_trades': 0, 'win_rate': 0, 'total_return': 0,
+                    'max_drawdown': 0, 'avg_return_per_trade': 0,
+                    'profit_factor': 0, 'processed': False,
+                    'reason': f'error: {str(e)}'
+                })
         
         elapsed_time = time.time() - start_time
         print("\n" + "=" * 80)
-        print(f"Backtest completed: {processed_count}/{len(ticker_list)} stocks processed successfully")
-        print(f"Failed: {failed_count} stocks")
+        print(f"Backtest completed: {processed_count}/{end_idx - start_idx} stocks processed")
         print(f"Time elapsed: {elapsed_time/60:.2f} minutes")
         
         return self.results
     
     def export_results(self, filename='nifty500_broom_breakout_results.csv'):
-        """Export results to CSV"""
+        """Export results"""
         results_df = pd.DataFrame(self.results)
         
         if results_df.empty:
             logger.error("No results to export")
             return None
         
-        # Reorder columns
-        column_order = [
-            'ticker', 'processed', 'reason', 'total_trades', 'win_rate', 
-            'total_return', 'max_drawdown', 'avg_return_per_trade', 'profit_factor'
-        ]
-        
-        # Filter to existing columns
-        column_order = [col for col in column_order if col in results_df.columns]
-        results_df = results_df[column_order]
-        
         results_df.to_csv(filename, index=False)
         print(f"\nResults exported to {filename}")
-        print(f"Total records: {len(results_df)}")
         
-        # Print summary statistics
+        # Summary statistics
         processed_df = results_df[results_df['processed'] == True]
         if len(processed_df) > 0:
             print("\n=== SUMMARY STATISTICS ===")
-            print(f"Stocks successfully processed: {len(processed_df)}")
+            print(f"Stocks processed: {len(processed_df)}")
             print(f"Stocks with trades: {len(processed_df[processed_df['total_trades'] > 0])}")
             print(f"Total trades: {processed_df['total_trades'].sum()}")
             print(f"Average win rate: {processed_df['win_rate'].mean():.2f}%")
             print(f"Average return: {processed_df['total_return'].mean():.2f}%")
-            print(f"Average max drawdown: {processed_df['max_drawdown'].mean():.2f}%")
             
-            # Top 10 performers
+            # Top performers
             stocks_with_trades = processed_df[processed_df['total_trades'] > 0]
             if len(stocks_with_trades) > 0:
                 top_performers = stocks_with_trades.nlargest(10, 'total_return')[
@@ -736,26 +757,20 @@ class BroomBreakoutBacktest:
 
 
 def get_nifty500_tickers():
-    """Get list of Nifty 500 tickers"""
-    # This is a sample list - in production, you would fetch this from NSE
-    
-    nifty_500_sample = [
+    """Get sample Nifty 500 tickers"""
+    return [
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
         'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
         'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-        # Add more tickers here...
-        # In production, fetch complete list from NSE API or CSV file
     ]
-    
-    return nifty_500_sample
 
 
 def main():
-    """Main execution function"""
+    """Main execution"""
     print("=" * 80)
     print("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-    print("Nifty 500 Universe Backtesting Engine - Enhanced Version")
+    print("Nifty 500 Universe Backtesting Engine - Multi-Source Version")
     print("=" * 80)
     
     # Get universe
@@ -765,13 +780,13 @@ def main():
     # Initialize backtest engine
     engine = BroomBreakoutBacktest()
     
-    # Run backtest with smaller batch size to avoid rate limiting
-    results = engine.run_universe_backtest(tickers, batch_size=5)
+    # Run backtest
+    results = engine.run_universe_backtest(tickers)
     
     # Export results
     results_df = engine.export_results()
     
-    print("\nBacktest completed successfully!")
+    print("\nBacktest completed!")
     return results_df
 
 
