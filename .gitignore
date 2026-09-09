@@ -5,15 +5,21 @@ __pycache__/
 venv/
 env/
 
-# Data
+# Data cache (don't commit)
 data_cache/
-*.csv
-*.log
 
-# State (keep minimal)
-state/*.tmp
-state/*.lock
+# Logs (don't commit)
+logs/
+
+# Results directory
+results/
 
 # IDE
 .vscode/
 .idea/
+.DS_Store
+
+# DO NOT ignore these - needed for learning
+# state/
+# nifty500_broom_breakout_results.csv
+# index.html
