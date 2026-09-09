@@ -7,10 +7,12 @@ import numpy as np
 import json
 import logging
 import sys
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
 import time
+from typing import Optional, Dict, List, Tuple
 
 # ==================== LOAD LEARNED PARAMS ====================
 
@@ -18,10 +20,12 @@ def load_learned_params():
     params_file = Path('state/current_params.json')
     
     if params_file.exists():
-        with open(params_file, 'r') as f:
-            data = json.load(f)
-        
-        return data.get('params', {}), data.get('version', 0)
+        try:
+            with open(params_file, 'r') as f:
+                data = json.load(f)
+            return data.get('params', {}), data.get('version', 0)
+        except:
+            pass
     
     return {
         'broom_compression_threshold': 0.08,
@@ -31,8 +35,6 @@ def load_learned_params():
     }, 0
 
 learned_params, version = load_learned_params()
-
-# ==================== CONFIGURATION ====================
 
 COMPRESSION_THRESHOLD = learned_params.get('broom_compression_threshold', 0.08)
 VOLUME_MULTIPLIER = learned_params.get('volume_threshold_multiplier', 1.5)
@@ -46,7 +48,10 @@ EMA_PERIODS = [20, 50, 100, 200]
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.FileHandler('logs/trade_generator.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -59,7 +64,7 @@ class DataFetcher:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
     
-    def fetch_data(self, ticker: str) -> pd.DataFrame:
+    def fetch_data(self, ticker: str) -> Optional[pd.DataFrame]:
         try:
             import yfinance as yf
             stock = yf.Ticker(ticker)
@@ -94,7 +99,7 @@ class TradeGenerator:
         rs = gain / loss
         return 100 - (100 / (1 + rs))
     
-    def check_signal(self, df: pd.DataFrame, ticker: str) -> Dict:
+    def check_signal(self, df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         if len(df) < 200:
             return None
         
@@ -191,20 +196,26 @@ class TradeGenerator:
         
         signals_df = pd.DataFrame(self.signals)
         
-        if not signals_df.empty:
-            signals_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
-            logger.info(f"\n✓ Generated {len(signals_df)} signals")
-        else:
-            logger.info("\n⚠️ No signals currently")
-            pd.DataFrame(columns=['ticker', 'action', 'entry_price', 'stop_loss', 'take_profit']).to_csv(
-                'nifty500_broom_breakout_results.csv', index=False
-            )
+        # ALWAYS save, even if empty
+        if signals_df.empty:
+            signals_df = pd.DataFrame(columns=[
+                'ticker', 'signal_date', 'entry_price', 'stop_loss', 
+                'take_profit', 'risk', 'reward', 'risk_reward', 
+                'compression', 'volume_ratio', 'rsi', 'action'
+            ])
+        
+        signals_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
+        logger.info(f"\n✓ Saved {len(signals_df)} signals to CSV")
         
         return signals_df
 
 # ==================== MAIN ====================
 
 def main():
+    # Ensure directories exist
+    os.makedirs('logs', exist_ok=True)
+    os.makedirs('state', exist_ok=True)
+    
     tickers = [
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
@@ -222,6 +233,8 @@ def main():
     signals = generator.generate(tickers)
     
     print(f"\n✅ Generated {len(signals)} trade signals")
+    print(f"✅ CSV file created: nifty500_broom_breakout_results.csv")
+    
     return signals
 
 if __name__ == "__main__":
