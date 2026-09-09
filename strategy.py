@@ -1,6 +1,6 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
-For Nifty 500 Universe - BALANCED PARAMETERS
+For Nifty 500 High Volume Stocks - Optimized for Liquidity
 """
 
 import pandas as pd
@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Central configuration management with balanced parameters"""
+    """Central configuration management for high volume stocks"""
     
     def __init__(self):
         # Environment detection
@@ -39,55 +39,56 @@ class Config:
         self.data_start = os.getenv('DATA_START', '2000-01-01')
         
         # Universe Configuration
-        self.universe_size = int(os.getenv('UNIVERSE_SIZE', '20'))
-        self.batch_size = int(os.getenv('BATCH_SIZE', '5'))
-        self.full_universe = os.getenv('FULL_UNIVERSE', 'false').lower() == 'true'
+        self.universe_size = int(os.getenv('UNIVERSE_SIZE', '500'))
+        self.batch_size = int(os.getenv('BATCH_SIZE', '10'))
+        self.full_universe = os.getenv('FULL_UNIVERSE', 'true').lower() == 'true'
         
-        # Strategy Parameters - BALANCED FOR BETTER PERFORMANCE
+        # Strategy Parameters - OPTIMIZED FOR HIGH VOLUME
         self.ema_periods = [20, 50, 100, 200]
         self.weekly_ema_period = 200
         self.monthly_ema_period = 200
         
-        # Higher Timeframe Trend Filters - RELAXED
+        # Higher Timeframe Trend Filters
         self.weekly_ema_short = 20
         self.weekly_ema_medium = 50
         self.monthly_ema_short = 10
         self.monthly_ema_medium = 20
         
-        # Trend Strength Requirements - RELAXED
-        self.weekly_trend_strength = float(os.getenv('WEEKLY_TREND_STRENGTH', '0.02'))  # Reduced from 5% to 2%
-        self.monthly_trend_strength = float(os.getenv('MONTHLY_TREND_STRENGTH', '0.01'))  # Reduced from 3% to 1%
+        # Trend Strength Requirements
+        self.weekly_trend_strength = float(os.getenv('WEEKLY_TREND_STRENGTH', '0.02'))
+        self.monthly_trend_strength = float(os.getenv('MONTHLY_TREND_STRENGTH', '0.01'))
         
-        # Broom Compression - OPTIMIZED
-        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.15'))  # Increased to 15%
+        # Broom Compression
+        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.15'))
         
-        # Base Parameters - OPTIMIZED
-        self.base_lookback_period = 150  # Reduced from 200
-        self.base_duration_min = int(os.getenv('BASE_DURATION_MIN', '30'))  # Reduced from 40
-        self.base_duration_max = int(os.getenv('BASE_DURATION_MAX', '200'))  # Increased from 180
+        # Base Parameters
+        self.base_lookback_period = 150
+        self.base_duration_min = int(os.getenv('BASE_DURATION_MIN', '30'))
+        self.base_duration_max = int(os.getenv('BASE_DURATION_MAX', '200'))
         
-        # Box Consolidation - RELAXED
-        self.box_consolidation_height = float(os.getenv('BOX_CONSOLIDATION_HEIGHT', '0.25'))  # Increased to 25%
+        # Box Consolidation
+        self.box_consolidation_height = float(os.getenv('BOX_CONSOLIDATION_HEIGHT', '0.25'))
         
-        # Prior Trend - RELAXED
-        self.prior_trend_exhaustion_limit = float(os.getenv('PRIOR_TREND_EXHAUSTION_LIMIT', '1.0'))  # Increased to 100%
+        # Prior Trend
+        self.prior_trend_exhaustion_limit = float(os.getenv('PRIOR_TREND_EXHAUSTION_LIMIT', '1.0'))
         
-        # Execution Parameters - OPTIMIZED FOR BETTER ENTRIES
+        # Execution Parameters
         self.volume_poc_bins = 10
         self.poc_lookback = 20
-        self.volume_threshold_multiplier = float(os.getenv('VOLUME_THRESHOLD_MULTIPLIER', '1.1'))  # Reduced to 1.1x
+        self.volume_threshold_multiplier = float(os.getenv('VOLUME_THRESHOLD_MULTIPLIER', '1.1'))
         self.volume_ma_period = 50
-        self.stop_loss_buffer = float(os.getenv('STOP_LOSS_BUFFER', '0.025'))  # Increased to 2.5%
-        self.measured_move_multiplier = float(os.getenv('MEASURED_MOVE_MULTIPLIER', '1.2'))  # Reduced to 1.2x
+        self.stop_loss_buffer = float(os.getenv('STOP_LOSS_BUFFER', '0.025'))
+        self.measured_move_multiplier = float(os.getenv('MEASURED_MOVE_MULTIPLIER', '1.2'))
         
-        # Additional Entry Filters - NEW
-        self.min_price = float(os.getenv('MIN_PRICE', '50'))  # Minimum stock price
-        self.max_price = float(os.getenv('MAX_PRICE', '5000'))  # Maximum stock price
-        self.min_volume = float(os.getenv('MIN_VOLUME', '100000'))  # Minimum average volume
+        # High Volume Filters - ENHANCED
+        self.min_price = float(os.getenv('MIN_PRICE', '100'))  # Higher minimum price
+        self.max_price = float(os.getenv('MAX_PRICE', '5000'))
+        self.min_volume = float(os.getenv('MIN_VOLUME', '500000'))  # 5 lakh shares minimum
+        self.min_value_traded = float(os.getenv('MIN_VALUE_TRADED', '50000000'))  # ₹5 crore minimum
         
         # Rate Limiting
-        self.request_delay = float(os.getenv('REQUEST_DELAY', '2'))
-        self.batch_delay = float(os.getenv('BATCH_DELAY', '10'))
+        self.request_delay = float(os.getenv('REQUEST_DELAY', '1'))
+        self.batch_delay = float(os.getenv('BATCH_DELAY', '5'))
         self.max_retries = int(os.getenv('MAX_RETRIES', '3'))
         
         # Cache settings
@@ -95,8 +96,12 @@ class Config:
         self.cache_expiry_days = int(os.getenv('CACHE_EXPIRY_DAYS', '7'))
         
         # Debug settings
-        self.debug_mode = os.getenv('DEBUG_MODE', 'true').lower() == 'true'
+        self.debug_mode = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
         self.trade_log_enabled = os.getenv('TRADE_LOG_ENABLED', 'true').lower() == 'true'
+        
+        # Checkpoint
+        self.checkpoint_file = 'checkpoint.json'
+        self.save_checkpoint = os.getenv('SAVE_CHECKPOINT', 'true').lower() == 'true'
         
         # Directories
         self.data_dir = Path('data_cache')
@@ -161,8 +166,8 @@ class DataFetcher:
         
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
-            pool_connections=2,
-            pool_maxsize=2
+            pool_connections=5,
+            pool_maxsize=5
         )
         
         session.mount("http://", adapter)
@@ -245,7 +250,7 @@ class DataFetcher:
     def fetch_with_fallback(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data with multiple source fallback"""
         
-        if self.rate_limit_hits >= 3:
+        if self.rate_limit_hits >= 5:
             logger.warning(f"Multiple rate limit hits. Waiting 60 seconds...")
             time.sleep(60)
             self.rate_limit_hits = 0
@@ -268,7 +273,7 @@ class DataFetcher:
         
         self.consecutive_failures += 1
         
-        if self.consecutive_failures >= 5:
+        if self.consecutive_failures >= 10:
             logger.warning(f"{self.consecutive_failures} consecutive failures. Waiting 120 seconds...")
             time.sleep(120)
             self.consecutive_failures = 0
@@ -278,7 +283,7 @@ class DataFetcher:
 # ==================== BACKTEST ENGINE ====================
 
 class BroomBreakoutBacktest:
-    """Main backtesting engine with balanced parameters"""
+    """Main backtesting engine optimized for high volume stocks"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -290,24 +295,57 @@ class BroomBreakoutBacktest:
         self.stocks_failed = 0
         self.total_trades = 0
         
+        # Checkpoint
+        self.checkpoint = self.load_checkpoint()
+        
         # Trade log
         self.trade_log_file = None
         if config.trade_log_enabled:
-            self.trade_log_file = open(config.logs_dir / 'trades.log', 'w')
+            self.trade_log_file = open(config.logs_dir / 'trades.log', 'a')
         
         logger.info("=" * 80)
-        logger.info("BROOM BREAKOUT BACKTEST ENGINE - BALANCED PARAMETERS")
+        logger.info("BROOM BREAKOUT BACKTEST ENGINE - HIGH VOLUME NIFTY 500")
+        logger.info(f"Universe: {self.config.universe_size} stocks")
+        logger.info(f"Min volume: {self.config.min_volume:,} shares")
+        logger.info(f"Min value traded: ₹{self.config.min_value_traded:,}")
         logger.info(f"Compression threshold: {self.config.broom_compression_threshold:.2%}")
-        logger.info(f"Box height limit: {self.config.box_consolidation_height:.2%}")
-        logger.info(f"Weekly trend strength: {self.config.weekly_trend_strength:.2%}")
-        logger.info(f"Monthly trend strength: {self.config.monthly_trend_strength:.2%}")
-        logger.info(f"Volume multiplier: {self.config.volume_threshold_multiplier}x")
-        logger.info(f"Measured move: {self.config.measured_move_multiplier}x")
         logger.info("=" * 80)
     
     def __del__(self):
         if self.trade_log_file:
             self.trade_log_file.close()
+    
+    def load_checkpoint(self) -> Dict:
+        """Load checkpoint from previous run"""
+        if not self.config.save_checkpoint:
+            return {}
+        
+        try:
+            if Path(self.config.checkpoint_file).exists():
+                with open(self.config.checkpoint_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load checkpoint: {e}")
+        
+        return {}
+    
+    def save_checkpoint_state(self, current_index: int):
+        """Save progress checkpoint"""
+        if not self.config.save_checkpoint:
+            return
+        
+        try:
+            checkpoint = {
+                'last_processed_index': current_index,
+                'processed_stocks': self.stocks_processed,
+                'total_trades': self.total_trades,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            with open(self.config.checkpoint_file, 'w') as f:
+                json.dump(checkpoint, f)
+        except Exception as e:
+            logger.warning(f"Failed to save checkpoint: {e}")
     
     def save_to_cache(self, ticker: str, df: pd.DataFrame):
         """Save data to cache"""
@@ -370,18 +408,15 @@ class BroomBreakoutBacktest:
                 'Volume': 'sum'
             }).dropna()
             
-            # Weekly EMAs
             weekly_df['Weekly_EMA_20'] = weekly_df['Close'].ewm(span=20, adjust=False).mean()
             weekly_df['Weekly_EMA_50'] = weekly_df['Close'].ewm(span=50, adjust=False).mean()
             weekly_df['Weekly_EMA_200'] = weekly_df['Close'].ewm(span=200, adjust=False).mean()
             
-            # Weekly trend - SIMPLIFIED
             weekly_df['Weekly_Trend_Up'] = (
                 (weekly_df['Close'] > weekly_df['Weekly_EMA_20']) &
                 (weekly_df['Weekly_EMA_20'] > weekly_df['Weekly_EMA_50'])
             )
             
-            # Weekly trend strength
             weekly_df['Weekly_Trend_Strength'] = (
                 (weekly_df['Close'] - weekly_df['Weekly_EMA_20']) / weekly_df['Weekly_EMA_20']
             )
@@ -395,18 +430,15 @@ class BroomBreakoutBacktest:
                 'Volume': 'sum'
             }).dropna()
             
-            # Monthly EMAs
             monthly_df['Monthly_EMA_10'] = monthly_df['Close'].ewm(span=10, adjust=False).mean()
             monthly_df['Monthly_EMA_20'] = monthly_df['Close'].ewm(span=20, adjust=False).mean()
             monthly_df['Monthly_EMA_200'] = monthly_df['Close'].ewm(span=200, adjust=False).mean()
             
-            # Monthly trend - SIMPLIFIED
             monthly_df['Monthly_Trend_Up'] = (
                 (monthly_df['Close'] > monthly_df['Monthly_EMA_10']) &
                 (monthly_df['Monthly_EMA_10'] > monthly_df['Monthly_EMA_20'])
             )
             
-            # Monthly trend strength
             monthly_df['Monthly_Trend_Strength'] = (
                 (monthly_df['Close'] - monthly_df['Monthly_EMA_10']) / monthly_df['Monthly_EMA_10']
             )
@@ -434,36 +466,29 @@ class BroomBreakoutBacktest:
         return df
     
     def check_higher_timeframe_trend(self, df: pd.DataFrame, position: int) -> Tuple[bool, str]:
-        """Check if higher timeframe trend is bullish - BALANCED"""
+        """Check if higher timeframe trend is bullish"""
         try:
-            # Check Weekly trend - RELAXED
             weekly_trend_up = df.iloc[position]['Weekly_Trend_Up']
             weekly_strength = df.iloc[position]['Weekly_Trend_Strength']
             
-            # Accept if weekly trend is up OR strong enough
             if pd.isna(weekly_trend_up) or not weekly_trend_up:
-                # Allow if just above weekly EMA
                 current_price = df.iloc[position]['Close']
                 weekly_ema_20 = df.iloc[position]['Weekly_EMA_20']
                 
                 if pd.isna(weekly_ema_20) or current_price <= weekly_ema_20:
                     return False, "Weekly trend not bullish"
                 else:
-                    # Price above weekly EMA but EMAs not aligned
                     weekly_strength = (current_price - weekly_ema_20) / weekly_ema_20
                     if weekly_strength < self.config.weekly_trend_strength:
                         return False, f"Weekly trend too weak: {weekly_strength:.2%}"
             
-            # Check Monthly trend - RELAXED
             monthly_trend_up = df.iloc[position]['Monthly_Trend_Up']
             monthly_strength = df.iloc[position]['Monthly_Trend_Strength']
             
             if pd.isna(monthly_trend_up):
-                # Monthly data not available, only use weekly
                 return True, "Weekly trend bullish"
             
             if not monthly_trend_up:
-                # Allow if just above monthly EMA
                 current_price = df.iloc[position]['Close']
                 monthly_ema_10 = df.iloc[position]['Monthly_EMA_10']
                 
@@ -477,32 +502,37 @@ class BroomBreakoutBacktest:
             return True, "Trend bullish"
             
         except Exception as e:
-            logger.debug(f"Error in higher timeframe check: {e}")
             return False, f"Error: {str(e)}"
     
     def check_liquidity_filter(self, df: pd.DataFrame, position: int) -> Tuple[bool, str]:
-        """Check liquidity filters"""
+        """Check high volume liquidity filters"""
         try:
             current_price = df.iloc[position]['Close']
             
             # Price filter
             if current_price < self.config.min_price:
-                return False, f"Price too low: {current_price:.2f}"
+                return False, f"Price too low: ₹{current_price:.2f}"
             if current_price > self.config.max_price:
-                return False, f"Price too high: {current_price:.2f}"
+                return False, f"Price too high: ₹{current_price:.2f}"
             
             # Volume filter
             avg_volume = df.iloc[max(0, position-20):position]['Volume'].mean()
             if avg_volume < self.config.min_volume:
-                return False, f"Volume too low: {avg_volume:.0f}"
+                return False, f"Volume too low: {avg_volume:,.0f}"
             
-            return True, "Liquidity OK"
+            # Value traded filter
+            avg_value = (df.iloc[max(0, position-20):position]['Close'] * 
+                        df.iloc[max(0, position-20):position]['Volume']).mean()
+            if avg_value < self.config.min_value_traded:
+                return False, f"Value traded too low: ₹{avg_value:,.0f}"
+            
+            return True, "High liquidity"
             
         except Exception as e:
             return False, f"Error: {str(e)}"
     
     def check_broom_setup(self, df: pd.DataFrame, position: int) -> bool:
-        """Check broom setup conditions - BALANCED"""
+        """Check broom setup conditions"""
         if position < self.config.base_lookback_period:
             return False
         
@@ -563,8 +593,6 @@ class BroomBreakoutBacktest:
                 logger.debug(f"Failed box height: {box_height:.2%}")
                 return False
             
-            # 4. Prior Trend - RELAXED (removed as it's too restrictive)
-            
             logger.debug(f"✓ Broom setup with {trend_reason}")
             return True
             
@@ -619,52 +647,44 @@ class BroomBreakoutBacktest:
             return None
     
     def check_entry_signal(self, df: pd.DataFrame, position: int) -> bool:
-        """Check entry trigger conditions - BALANCED"""
+        """Check entry trigger conditions"""
         try:
             current_price = df.iloc[position]['Close']
             
-            # Get highest EMA
             ema_values = [df.iloc[position][f'EMA_{period}'] for period in self.config.ema_periods]
             highest_ema = max(ema_values)
             
-            # Check breakout above highest EMA - RELAXED
-            if current_price <= highest_ema * 0.99:  # Allow 1% below highest EMA
-                logger.debug(f"Failed EMA breakout: {current_price:.2f} <= {highest_ema:.2f}")
+            if current_price <= highest_ema * 0.99:
+                logger.debug(f"Failed EMA breakout")
                 return False
             
-            # Calculate Volume Profile POC
             poc_price = self.calculate_volume_profile_poc(df, position)
             if poc_price is None:
                 return False
             
-            # Check breakout above POC - RELAXED
-            poc_threshold = poc_price * 0.95  # Allow 5% below POC
+            poc_threshold = poc_price * 0.95
             if current_price <= poc_threshold:
-                logger.debug(f"Failed POC breakout: {current_price:.2f} <= {poc_threshold:.2f}")
+                logger.debug(f"Failed POC breakout")
                 return False
             
-            # Volume confirmation - RELAXED
             if position < self.config.volume_ma_period:
                 return False
             
             volume_ma = df.iloc[position - self.config.volume_ma_period:position]['Volume'].mean()
             current_volume = df.iloc[position]['Volume']
             
-            # Allow if volume is above average OR price is strong
             if current_volume <= self.config.volume_threshold_multiplier * volume_ma:
-                # Check if price increase is significant
                 prev_close = df.iloc[position-1]['Close']
                 price_change = (current_price - prev_close) / prev_close
                 
-                if price_change < 0.02:  # Less than 2% price increase
-                    logger.debug(f"Failed volume and price change: {current_volume:.0f} <= {self.config.volume_threshold_multiplier * volume_ma:.0f}, {price_change:.2%}")
+                if price_change < 0.02:
+                    logger.debug(f"Failed volume and price change")
                     return False
             
             logger.debug("✓ Entry signal triggered")
             return True
             
         except Exception as e:
-            logger.debug(f"Error in entry signal: {e}")
             return False
     
     def run_backtest(self, df: pd.DataFrame, ticker: str = "") -> List[Dict]:
@@ -684,14 +704,11 @@ class BroomBreakoutBacktest:
             
             setup_count = 0
             entry_count = 0
-            trend_filter_count = 0
-            liquidity_filter_count = 0
             
             for date_idx in backtest_df.index:
                 position_idx = df.index.get_loc(date_idx)
                 
                 if position is None:
-                    # Check setup
                     if self.check_broom_setup(df, position_idx):
                         setup_count += 1
                         if self.check_entry_signal(df, position_idx):
@@ -722,7 +739,7 @@ class BroomBreakoutBacktest:
                             }
                             
                             logger.info(f"🚀 ENTRY: {ticker} at {date_idx.date()} | "
-                                      f"Price: {entry_price:.2f} | Target: {take_profit:.2f}")
+                                      f"Price: ₹{entry_price:.2f} | Target: ₹{take_profit:.2f}")
                             
                             if self.trade_log_file:
                                 self.trade_log_file.write(
@@ -730,7 +747,6 @@ class BroomBreakoutBacktest:
                                 )
                                 self.trade_log_file.flush()
                 else:
-                    # Manage existing position
                     current_price = df.iloc[position_idx]['Close']
                     current_high = df.iloc[position_idx]['High']
                     current_low = df.iloc[position_idx]['Low']
@@ -891,7 +907,11 @@ class BroomBreakoutBacktest:
         logger.info(f"Backtest period: {self.config.backtest_start} to present")
         logger.info("=" * 80)
         
-        for batch_start in range(0, len(ticker_list), self.config.batch_size):
+        start_idx = self.checkpoint.get('last_processed_index', 0)
+        if start_idx > 0:
+            logger.info(f"Resuming from checkpoint at stock {start_idx}")
+        
+        for batch_start in range(start_idx, len(ticker_list), self.config.batch_size):
             batch_end = min(batch_start + self.config.batch_size, len(ticker_list))
             batch = ticker_list[batch_start:batch_end]
             
@@ -938,8 +958,8 @@ class BroomBreakoutBacktest:
                         logger.info(f"  ✓ {metrics['total_trades']} trades, "
                                   f"Win Rate: {metrics['win_rate']:.1f}%, "
                                   f"Return: {metrics['total_return']:.1f}%")
-                    else:
-                        logger.info(f"  ✓ No qualifying trades")
+                    
+                    self.save_checkpoint_state(global_idx + 1)
                     
                     del df, trades
                     gc.collect()
@@ -1013,23 +1033,108 @@ class BroomBreakoutBacktest:
         
         return results_df
 
-# ==================== NIFTY 500 UNIVERSE ====================
+# ==================== NIFTY 500 HIGH VOLUME UNIVERSE ====================
 
-def get_nifty500_tickers() -> List[str]:
-    """Get list of Nifty 500 tickers - testing with 20 stocks"""
+def get_nifty500_high_volume_tickers() -> List[str]:
+    """Get complete list of Nifty 500 high volume stocks"""
     
-    nifty_500 = [
+    # Comprehensive list of high-volume Nifty 500 stocks
+    # Organized by sector for better coverage
+    
+    nifty_500_high_volume = [
+        # Large Cap - High Volume Leaders
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
         'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
         'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
+        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
+        'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS', 'CIPLA.NS',
+        'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
+        'GAIL.NS', 'GRASIM.NS', 'HCLTECH.NS', 'HDFCLIFE.NS',
+        'HEROMOTOCO.NS', 'HINDALCO.NS', 'HINDZINC.NS', 'ICICIPRULI.NS',
+        'INDUSINDBK.NS', 'IOC.NS', 'JSWSTEEL.NS', 'LTIM.NS',
+        'M&M.NS', 'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS',
+        'SBILIFE.NS', 'SHRIRAMFIN.NS', 'SIEMENS.NS', 'TATACONSUM.NS',
+        'TATAMOTORS.NS', 'TATASTEEL.NS', 'TECHM.NS', 'UPL.NS', 'VEDL.NS',
+        
+        # Banking & Financial Services - High Volume
+        'AUBANK.NS', 'BANDHANBNK.NS', 'BANKBARODA.NS', 'BANKINDIA.NS', 'CANBK.NS',
+        'CHOLAFIN.NS', 'CUB.NS', 'FEDERALBNK.NS', 'HDFCAMC.NS', 'ICICIGI.NS',
+        'IDFCFIRSTB.NS', 'IEX.NS', 'INDIANB.NS', 'INDUSINDBK.NS', 'KARURVYSYA.NS',
+        'LICHSGFIN.NS', 'M&MFIN.NS', 'MANAPPURAM.NS', 'MUTHOOTFIN.NS', 'PNB.NS',
+        'POONAWALLA.NS', 'RBLBANK.NS', 'SBICARD.NS', 'UCOBANK.NS', 'UNIONBANK.NS',
+        'YESBANK.NS',
+        
+        # IT & Technology - High Volume
+        'COFORGE.NS', 'CYIENT.NS', 'HAPPSTMNDS.NS', 'INTELLECT.NS', 'KPITTECH.NS',
+        'LTTS.NS', 'MINDTREE.NS', 'MPHASIS.NS', 'OFSS.NS', 'PERSISTENT.NS',
+        'TATAELXSI.NS', 'ZENSARTECH.NS',
+        
+        # Pharma & Healthcare - High Volume
+        'ALKEM.NS', 'AUROPHARMA.NS', 'BIOCON.NS', 'GLENMARK.NS', 'GRANULES.NS',
+        'LAURUSLABS.NS', 'LUPIN.NS', 'NATCOPHARM.NS', 'PPLPHARMA.NS', 'SYNGENE.NS',
+        'TORNTPHARM.NS', 'ZYDUSLIFE.NS',
+        
+        # Auto & Auto Ancillaries - High Volume
+        'ASHOKLEY.NS', 'BHARATFORG.NS', 'BOSCHLTD.NS', 'ESCORTS.NS', 'EXIDEIND.NS',
+        'MOTHERSON.NS', 'MRF.NS', 'TVSMOTOR.NS',
+        
+        # Metals & Mining - High Volume
+        'HINDCOPPER.NS', 'JINDALSTEL.NS', 'JSWSTEEL.NS', 'NATIONALUM.NS', 'SAIL.NS',
+        'TATASTEEL.NS', 'VEDL.NS',
+        
+        # Energy & Power - High Volume
+        'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS', 'CGPOWER.NS', 'JSWENERGY.NS',
+        'NLCINDIA.NS', 'NHPC.NS', 'POWERFIN.NS', 'RECLTD.NS', 'TATAPOWER.NS',
+        
+        # FMCG & Consumer - High Volume
+        'DABUR.NS', 'EMAMI.NS', 'GODREJCP.NS', 'GODREJIND.NS', 'MARICO.NS',
+        'RADICO.NS', 'UBL.NS', 'VBL.NS',
+        
+        # Infrastructure & Construction - High Volume
+        'BEL.NS', 'BHEL.NS', 'DLF.NS', 'GODREJPROP.NS', 'IRB.NS',
+        'LODHA.NS', 'NBCC.NS', 'NCC.NS', 'OBEROIRLTY.NS', 'PRESTIGE.NS',
+        
+        # Telecom & Media - High Volume
+        'IDEA.NS', 'INDUSTOWER.NS', 'NAUKRI.NS', 'PVR.NS', 'SUNTV.NS',
+        'TV18BRDCST.NS', 'ZOMATO.NS',
+        
+        # Chemicals & Fertilizers - High Volume
+        'AARTIIND.NS', 'CHAMBLFERT.NS', 'COROMANDEL.NS', 'DEEPAKNTR.NS', 'GNFC.NS',
+        'GSFC.NS', 'PIDILITIND.NS', 'PIIND.NS', 'SRF.NS', 'TATACHEM.NS',
+        
+        # Textiles & Apparel - High Volume
+        'ABFRL.NS', 'ARVIND.NS', 'PAGEIND.NS', 'RAYMOND.NS', 'WELSPUNIND.NS',
+        
+        # Real Estate - High Volume
+        'BRIGADE.NS', 'DLF.NS', 'GODREJPROP.NS', 'OBEROIRLTY.NS', 'PHOENIXLTD.NS',
+        'PRESTIGE.NS', 'SUNTECK.NS',
+        
+        # Logistics & Transportation - High Volume
+        'CONCOR.NS', 'GATI.NS', 'IRCTC.NS', 'MAHLOG.NS', 'TCI.NS',
+        
+        # Retail & Consumer - High Volume
+        'DMART.NS', 'TRENT.NS', 'VBL.NS',
+        
+        # Others - High Volume
+        'APLAPOLLO.NS', 'ASTRAL.NS', 'BATAINDIA.NS', 'BERGEPAINT.NS', 'BLUESTARCO.NS',
+        'CASTROLIND.NS', 'CROMPTON.NS', 'CUMMINSIND.NS', 'DIXON.NS', 'HAVELLS.NS',
+        'JUBLFOOD.NS', 'KAJARIACER.NS', 'KANSAINER.NS', 'KEI.NS', 'POLYCAB.NS',
+        'SUPREMEIND.NS', 'VOLTAS.NS', 'WHIRLPOOL.NS',
     ]
     
-    if config.universe_size < len(nifty_500):
-        logger.info(f"Using subset of {config.universe_size} stocks")
-        nifty_500 = nifty_500[:config.universe_size]
+    # Remove duplicates while preserving order
+    seen = set()
+    nifty_500_high_volume = [x for x in nifty_500_high_volume if not (x in seen or seen.add(x))]
     
-    return nifty_500
+    # Apply universe size limit if specified
+    if not config.full_universe and config.universe_size < len(nifty_500_high_volume):
+        logger.info(f"Using subset of {config.universe_size} high-volume stocks")
+        nifty_500_high_volume = nifty_500_high_volume[:config.universe_size]
+    else:
+        logger.info(f"Using complete high-volume universe: {len(nifty_500_high_volume)} stocks")
+    
+    return nifty_500_high_volume
 
 # ==================== MAIN EXECUTION ====================
 
@@ -1038,16 +1143,19 @@ def main():
     try:
         logger.info("=" * 80)
         logger.info("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-        logger.info("Nifty 500 Universe - Balanced Parameters")
+        logger.info("Nifty 500 High Volume Universe Backtesting Engine")
         logger.info("=" * 80)
         
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Pandas version: {pd.__version__}")
         logger.info(f"Numpy version: {np.__version__}")
         logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"Universe size: {config.universe_size}")
+        logger.info(f"Minimum volume: {config.min_volume:,} shares")
+        logger.info(f"Minimum value traded: ₹{config.min_value_traded:,}")
         
-        tickers = get_nifty500_tickers()
-        logger.info(f"\nUniverse size: {len(tickers)} stocks")
+        tickers = get_nifty500_high_volume_tickers()
+        logger.info(f"\nTotal high-volume stocks to process: {len(tickers)}")
         
         engine = BroomBreakoutBacktest(config)
         
@@ -1059,10 +1167,27 @@ def main():
         logger.info("BACKTEST COMPLETED SUCCESSFULLY")
         logger.info("=" * 80)
         
+        if config.is_github_actions:
+            print("\n✅ Backtest completed successfully!")
+            print(f"Results saved to: nifty500_broom_breakout_results.csv")
+            
+            if not results_df.empty:
+                processed = results_df[results_df['processed'] == True]
+                if len(processed) > 0:
+                    print(f"\n📊 Summary:")
+                    print(f"  - Stocks processed: {len(processed)}")
+                    print(f"  - Total trades: {processed['total_trades'].sum()}")
+                    print(f"  - Average win rate: {processed['win_rate'].mean():.2f}%")
+                    print(f"  - Average return: {processed['total_return'].mean():.2f}%")
+        
         return results_df
         
     except Exception as e:
         logger.error(f"Fatal error in main: {str(e)}", exc_info=True)
+        
+        if config.is_github_actions:
+            print(f"\n❌ Backtest failed: {str(e)}")
+        
         sys.exit(1)
 
 if __name__ == "__main__":
