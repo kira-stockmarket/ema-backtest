@@ -1,2 +1,1 @@
-broom_compression_threshold,volume_threshold_multiplier,stop_loss_buffer,measured_move_multiplier
-0.077396468960998,1.5,0.0165,1.8
+ticker,signal_date,entry_price,stop_loss,take_profit,risk,reward,risk_reward,compression,volume_ratio,rsi,action
