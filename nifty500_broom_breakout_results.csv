@@ -1,0 +1,2 @@
+broom_compression_threshold,volume_threshold_multiplier,stop_loss_buffer,measured_move_multiplier
+0.08,1.5,0.015,2.0

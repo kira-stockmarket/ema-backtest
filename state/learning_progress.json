@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2026-09-09T22:23:03.322072",
+    "version": 0,
+    "total_trades": 3283,
+    "metrics": {
+      "new_trades": 3283,
+      "total_trades": 3283,
+      "params": {
+        "broom_compression_threshold": 0.08,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.015,
+        "measured_move_multiplier": 2.0
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.08,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.015,
+      "measured_move_multiplier": 2.0
+    }
+  }
+]
