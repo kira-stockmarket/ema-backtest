@@ -1,29 +1,37 @@
-name: Scheduled Nifty 500 Backtest
+name: Nifty 500 Broom Breakout Backtest
 
 on:
-  schedule:
-    # Run every Sunday at 1:30 AM IST (Saturday 8:00 PM UTC)
-    - cron: '0 20 * * 6'
-    
-    # Run on the 1st of every month at 2:00 AM IST (Sunday 8:30 PM UTC)
-    - cron: '30 20 * * 0'
-  
-  # Allow manual trigger
   workflow_dispatch:
     inputs:
-      full_universe:
-        description: 'Run full Nifty 500 universe'
+      universe_size:
+        description: 'Number of stocks to process (default: 20)'
         required: false
-        default: 'true'
+        default: '20'
         type: string
+      batch_size:
+        description: 'Batch size for processing (default: 5)'
+        required: false
+        default: '5'
+        type: string
+      
+  schedule:
+    - cron: '0 20 * * 6'
+    
+  push:
+    branches:
+      - main
+    paths:
+      - 'strategy.py'
+      - 'requirements.txt'
+      - '.github/workflows/backtest.yml'
 
 env:
   PYTHON_VERSION: '3.10'
 
 jobs:
-  scheduled-backtest:
+  backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 720  # 12 hours for full universe
+    timeout-minutes: 360
     
     steps:
     - name: Checkout repository
@@ -45,87 +53,50 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    - name: Cache stock data
-      uses: actions/cache@v4
-      with:
-        path: data_cache
-        key: ${{ runner.os }}-stock-data-${{ github.run_id }}
-        restore-keys: |
-          ${{ runner.os }}-stock-data-
-    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Verify installation
+      run: |
+        python -c "import pandas, numpy, yfinance, requests; print('Dependencies installed successfully')"
+        python -c "import pandas as pd; import numpy as np; print(f'pandas: {pd.__version__}, numpy: {np.__version__}')"
+    
     - name: Create output directory
       run: |
         mkdir -p results logs data_cache
     
-    - name: Run full Nifty 500 backtest
+    - name: Run backtest
       env:
-        FULL_UNIVERSE: ${{ github.event.inputs.full_universe || 'true' }}
-        UNIVERSE_SIZE: '500'
-        BATCH_SIZE: '10'
+        UNIVERSE_SIZE: ${{ github.event.inputs.universe_size || '20' }}
+        BATCH_SIZE: ${{ github.event.inputs.batch_size || '5' }}
         ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
         GITHUB_ACTIONS: 'true'
       run: |
-        echo "Running full Nifty 500 backtest"
-        echo "Universe size: 500 stocks"
-        echo "Batch size: 10"
+        echo "Starting backtest with universe size: $UNIVERSE_SIZE, batch size: $BATCH_SIZE"
         python strategy.py
       continue-on-error: true
     
     - name: Check results
       run: |
         if [ -f "nifty500_broom_breakout_results.csv" ]; then
-          echo "✅ Results generated successfully"
-          wc -l nifty500_broom_breakout_results.csv
+          echo "✅ Backtest results generated successfully"
           head -20 nifty500_broom_breakout_results.csv
         else
           echo "❌ No results file generated"
           exit 1
         fi
     
-    - name: Upload results as artifact
+    - name: Upload backtest results
       uses: actions/upload-artifact@v4
       with:
-        name: full-universe-results-${{ github.run_id }}
+        name: backtest-results-${{ github.run_id }}
         path: |
           nifty500_broom_breakout_results.csv
           backtest.log
-          results/
-        retention-days: 365
+        retention-days: 90
         compression-level: 6
-    
-    - name: Create Release
-      if: success()
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: backtest-${{ github.run_id }}
-        name: Backtest Results - ${{ github.run_id }}
-        body: |
-          # Nifty 500 Backtest Results
-          
-          Run ID: ${{ github.run_id }}
-          Date: ${{ github.event.repository.updated_at }}
-          
-          ## Files
-          - `nifty500_broom_breakout_results.csv`: Complete results for all stocks
-          - `backtest.log`: Detailed execution logs
-          
-          ## How to Use
-          1. Download the CSV file
-          2. Open in Excel or any spreadsheet software
-          3. Filter by `processed` column to see successful runs
-          4. Sort by `total_return` to see best performers
-        files: |
-          nifty500_broom_breakout_results.csv
-          backtest.log
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Create summary
       if: always()
@@ -136,10 +107,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ -f "nifty500_broom_breakout_results.csv" ]; then
-          echo "### Results file generated successfully" >> $GITHUB_STEP_SUMMARY
-          echo "### Total rows: $(wc -l < nifty500_broom_breakout_results.csv)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### First 20 rows:" >> $GITHUB_STEP_SUMMARY
+          echo "### Results file generated" >> $GITHUB_STEP_SUMMARY
           echo '```csv' >> $GITHUB_STEP_SUMMARY
           head -20 nifty500_broom_breakout_results.csv >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
