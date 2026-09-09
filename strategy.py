@@ -1,6 +1,6 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
-For Nifty 500 Universe - FIXED INDEX BUG
+For Nifty 500 Universe - CORRECTED TREND FILTERS
 """
 
 import pandas as pd
@@ -25,13 +25,13 @@ warnings.filterwarnings('ignore')
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Central configuration management with optimized parameters"""
+    """Central configuration management"""
     
     def __init__(self):
         # Environment detection
         self.is_github_actions = os.getenv('GITHUB_ACTIONS', 'false').lower() == 'true'
         
-        # API Keys from environment (GitHub Secrets)
+        # API Keys
         self.alpha_vantage_api_key = os.getenv('ALPHA_VANTAGE_API_KEY', '')
         
         # Backtest Period
@@ -43,26 +43,30 @@ class Config:
         self.batch_size = int(os.getenv('BATCH_SIZE', '5'))
         self.full_universe = os.getenv('FULL_UNIVERSE', 'false').lower() == 'true'
         
-        # Strategy Parameters - OPTIMIZED FOR MORE TRADES
+        # Strategy Parameters
         self.ema_periods = [20, 50, 100, 200]
         self.weekly_ema_period = 200
         self.monthly_ema_period = 200
         
-        # Broom Compression - RELAXED from 8% to 12%
-        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.12'))
+        # Higher Timeframe Trend Filters - NEW
+        self.weekly_ema_short = 20  # Weekly 20 EMA for short-term trend
+        self.weekly_ema_medium = 50  # Weekly 50 EMA for medium-term trend
+        self.monthly_ema_short = 10  # Monthly 10 EMA for short-term trend
+        self.monthly_ema_medium = 20  # Monthly 20 EMA for medium-term trend
         
-        # Base Parameters - RELAXED
+        # Trend Strength Requirements
+        self.weekly_trend_strength = float(os.getenv('WEEKLY_TREND_STRENGTH', '0.05'))  # 5% above weekly EMA
+        self.monthly_trend_strength = float(os.getenv('MONTHLY_TREND_STRENGTH', '0.03'))  # 3% above monthly EMA
+        
+        # Broom Compression
+        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.12'))
         self.base_lookback_period = 200
         self.base_duration_min = int(os.getenv('BASE_DURATION_MIN', '40'))
         self.base_duration_max = int(os.getenv('BASE_DURATION_MAX', '180'))
-        
-        # Box Consolidation - RELAXED from 15% to 20%
         self.box_consolidation_height = float(os.getenv('BOX_CONSOLIDATION_HEIGHT', '0.20'))
-        
-        # Prior Trend - RELAXED from 60% to 80%
         self.prior_trend_exhaustion_limit = float(os.getenv('PRIOR_TREND_EXHAUSTION_LIMIT', '0.80'))
         
-        # Execution Parameters - OPTIMIZED
+        # Execution Parameters
         self.volume_poc_bins = 10
         self.poc_lookback = 20
         self.volume_threshold_multiplier = float(os.getenv('VOLUME_THRESHOLD_MULTIPLIER', '1.2'))
@@ -80,7 +84,7 @@ class Config:
         self.cache_expiry_days = int(os.getenv('CACHE_EXPIRY_DAYS', '7'))
         
         # Debug settings
-        self.debug_mode = os.getenv('DEBUG_MODE', 'false').lower() == 'true'  # Set to false to reduce log noise
+        self.debug_mode = os.getenv('DEBUG_MODE', 'true').lower() == 'true'
         self.trade_log_enabled = os.getenv('TRADE_LOG_ENABLED', 'true').lower() == 'true'
         
         # Directories
@@ -92,7 +96,6 @@ class Config:
         for dir_path in [self.data_dir, self.results_dir, self.logs_dir]:
             dir_path.mkdir(exist_ok=True)
         
-        # Validate configuration
         self._validate_config()
     
     def _validate_config(self):
@@ -102,9 +105,6 @@ class Config:
         
         if self.batch_size <= 0:
             raise ValueError("BATCH_SIZE must be positive")
-        
-        if self.broom_compression_threshold <= 0 or self.broom_compression_threshold >= 1:
-            raise ValueError("BROOM_COMPRESSION_THRESHOLD must be between 0 and 1")
 
 # ==================== LOGGING SETUP ====================
 
@@ -123,7 +123,6 @@ def setup_logging(config: Config):
     
     return logging.getLogger(__name__)
 
-# Initialize configuration and logging
 config = Config()
 logger = setup_logging(config)
 
@@ -171,8 +170,6 @@ class DataFetcher:
         try:
             import yfinance as yf
             
-            logger.debug(f"Fetching {ticker} from yfinance")
-            
             stock = yf.Ticker(ticker, session=self.session)
             
             df = stock.history(
@@ -190,31 +187,24 @@ class DataFetcher:
                     df = df.dropna()
                     
                     if len(df) > 100:
-                        logger.info(f"✓ yfinance: {len(df)} rows for {ticker}")
                         return df
             
             return None
             
         except Exception as e:
             if "429" in str(e) or "rate limit" in str(e).lower():
-                logger.warning(f"Rate limited by yfinance for {ticker}")
                 self.rate_limit_hits += 1
-            else:
-                logger.debug(f"yfinance failed for {ticker}: {str(e)}")
             return None
     
     def fetch_from_stooq(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data from Stooq directly via HTTP"""
         try:
-            # Convert ticker format for Stooq
             if ticker.endswith('.NS'):
                 stooq_ticker = ticker.replace('.NS', '.NSE')
             elif ticker.endswith('.BO'):
                 stooq_ticker = ticker.replace('.BO', '.BSE')
             else:
                 stooq_ticker = ticker + '.NSE'
-            
-            logger.debug(f"Fetching {ticker} from Stooq as {stooq_ticker}")
             
             url = f"https://stooq.com/q/d/l/?s={stooq_ticker.lower()}&d1={start_date.replace('-', '')}&d2={datetime.now().strftime('%Y%m%d')}&i=d"
             
@@ -234,13 +224,11 @@ class DataFetcher:
                         df = df.dropna()
                         
                         if len(df) > 100:
-                            logger.info(f"✓ Stooq: {len(df)} rows for {ticker}")
                             return df
             
             return None
             
         except Exception as e:
-            logger.debug(f"Stooq failed for {ticker}: {str(e)}")
             return None
     
     def fetch_with_fallback(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
@@ -265,7 +253,7 @@ class DataFetcher:
                     return df
                     
             except Exception as e:
-                logger.error(f"Error with {source_name} for {ticker}: {str(e)}")
+                logger.debug(f"Error with {source_name} for {ticker}: {str(e)}")
         
         self.consecutive_failures += 1
         
@@ -279,7 +267,7 @@ class DataFetcher:
 # ==================== BACKTEST ENGINE ====================
 
 class BroomBreakoutBacktest:
-    """Main backtesting engine with FIXED index handling"""
+    """Main backtesting engine with corrected higher timeframe trend filters"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -297,15 +285,14 @@ class BroomBreakoutBacktest:
             self.trade_log_file = open(config.logs_dir / 'trades.log', 'w')
         
         logger.info("=" * 80)
-        logger.info("BROOM BREAKOUT BACKTEST ENGINE INITIALIZED")
+        logger.info("BROOM BREAKOUT BACKTEST ENGINE - CORRECTED TREND FILTERS")
         logger.info(f"Compression threshold: {self.config.broom_compression_threshold:.2%}")
         logger.info(f"Box height limit: {self.config.box_consolidation_height:.2%}")
-        logger.info(f"Volume multiplier: {self.config.volume_threshold_multiplier}x")
-        logger.info(f"Stop loss buffer: {self.config.stop_loss_buffer:.2%}")
+        logger.info(f"Weekly trend strength: {self.config.weekly_trend_strength:.2%}")
+        logger.info(f"Monthly trend strength: {self.config.monthly_trend_strength:.2%}")
         logger.info("=" * 80)
     
     def __del__(self):
-        """Cleanup"""
         if self.trade_log_file:
             self.trade_log_file.close()
     
@@ -317,7 +304,6 @@ class BroomBreakoutBacktest:
         try:
             cache_file = self.config.data_dir / f"{ticker.replace('.', '_')}.csv"
             df.to_csv(cache_file)
-            logger.debug(f"Cached data for {ticker}")
         except Exception as e:
             logger.warning(f"Failed to cache {ticker}: {e}")
     
@@ -334,10 +320,7 @@ class BroomBreakoutBacktest:
                 
                 if file_age < self.config.cache_expiry_days * 24 * 3600:
                     df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-                    logger.info(f"✓ Cache: {len(df)} rows for {ticker}")
                     return df
-                else:
-                    logger.debug(f"Cache expired for {ticker}")
         except Exception as e:
             logger.warning(f"Cache load failed for {ticker}: {e}")
         
@@ -363,8 +346,9 @@ class BroomBreakoutBacktest:
         return df
     
     def create_higher_timeframes(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create weekly and monthly timeframes"""
+        """Create weekly and monthly timeframes with multiple EMAs"""
         try:
+            # Weekly resampling
             weekly_df = df.resample('W-FRI').agg({
                 'Open': 'first',
                 'High': 'max',
@@ -373,10 +357,24 @@ class BroomBreakoutBacktest:
                 'Volume': 'sum'
             }).dropna()
             
-            weekly_df[f'EMA_{self.config.weekly_ema_period}_Weekly'] = weekly_df['Close'].ewm(
-                span=self.config.weekly_ema_period, adjust=False
-            ).mean()
+            # Weekly EMAs
+            weekly_df['Weekly_EMA_20'] = weekly_df['Close'].ewm(span=20, adjust=False).mean()
+            weekly_df['Weekly_EMA_50'] = weekly_df['Close'].ewm(span=50, adjust=False).mean()
+            weekly_df['Weekly_EMA_200'] = weekly_df['Close'].ewm(span=200, adjust=False).mean()
             
+            # Weekly trend direction
+            weekly_df['Weekly_Trend_Up'] = (
+                (weekly_df['Close'] > weekly_df['Weekly_EMA_20']) &
+                (weekly_df['Weekly_EMA_20'] > weekly_df['Weekly_EMA_50']) &
+                (weekly_df['Weekly_EMA_50'] > weekly_df['Weekly_EMA_200'])
+            )
+            
+            # Weekly trend strength (percentage above 20 EMA)
+            weekly_df['Weekly_Trend_Strength'] = (
+                (weekly_df['Close'] - weekly_df['Weekly_EMA_20']) / weekly_df['Weekly_EMA_20']
+            )
+            
+            # Monthly resampling
             monthly_df = df.resample('ME').agg({
                 'Open': 'first',
                 'High': 'max',
@@ -385,45 +383,98 @@ class BroomBreakoutBacktest:
                 'Volume': 'sum'
             }).dropna()
             
-            monthly_df[f'EMA_{self.config.monthly_ema_period}_Monthly'] = monthly_df['Close'].ewm(
-                span=self.config.monthly_ema_period, adjust=False
-            ).mean()
+            # Monthly EMAs
+            monthly_df['Monthly_EMA_10'] = monthly_df['Close'].ewm(span=10, adjust=False).mean()
+            monthly_df['Monthly_EMA_20'] = monthly_df['Close'].ewm(span=20, adjust=False).mean()
+            monthly_df['Monthly_EMA_200'] = monthly_df['Close'].ewm(span=200, adjust=False).mean()
             
-            df['Weekly_200_EMA'] = weekly_df[f'EMA_{self.config.weekly_ema_period}_Weekly'].reindex(
-                df.index, method='ffill'
+            # Monthly trend direction
+            monthly_df['Monthly_Trend_Up'] = (
+                (monthly_df['Close'] > monthly_df['Monthly_EMA_10']) &
+                (monthly_df['Monthly_EMA_10'] > monthly_df['Monthly_EMA_20']) &
+                (monthly_df['Monthly_EMA_20'] > monthly_df['Monthly_EMA_200'])
             )
-            df['Monthly_200_EMA'] = monthly_df[f'EMA_{self.config.monthly_ema_period}_Monthly'].reindex(
-                df.index, method='ffill'
+            
+            # Monthly trend strength
+            monthly_df['Monthly_Trend_Strength'] = (
+                (monthly_df['Close'] - monthly_df['Monthly_EMA_10']) / monthly_df['Monthly_EMA_10']
             )
+            
+            # Map back to daily using forward fill
+            df['Weekly_EMA_20'] = weekly_df['Weekly_EMA_20'].reindex(df.index, method='ffill')
+            df['Weekly_EMA_50'] = weekly_df['Weekly_EMA_50'].reindex(df.index, method='ffill')
+            df['Weekly_EMA_200'] = weekly_df['Weekly_EMA_200'].reindex(df.index, method='ffill')
+            df['Weekly_Trend_Up'] = weekly_df['Weekly_Trend_Up'].reindex(df.index, method='ffill')
+            df['Weekly_Trend_Strength'] = weekly_df['Weekly_Trend_Strength'].reindex(df.index, method='ffill')
+            
+            df['Monthly_EMA_10'] = monthly_df['Monthly_EMA_10'].reindex(df.index, method='ffill')
+            df['Monthly_EMA_20'] = monthly_df['Monthly_EMA_20'].reindex(df.index, method='ffill')
+            df['Monthly_EMA_200'] = monthly_df['Monthly_EMA_200'].reindex(df.index, method='ffill')
+            df['Monthly_Trend_Up'] = monthly_df['Monthly_Trend_Up'].reindex(df.index, method='ffill')
+            df['Monthly_Trend_Strength'] = monthly_df['Monthly_Trend_Strength'].reindex(df.index, method='ffill')
             
         except Exception as e:
-            logger.error(f"Error creating higher timeframes: {e}")
-            df['Weekly_200_EMA'] = np.nan
-            df['Monthly_200_EMA'] = np.nan
+            logger.debug(f"Error creating higher timeframes: {e}")
+            # Set defaults
+            df['Weekly_Trend_Up'] = False
+            df['Weekly_Trend_Strength'] = 0
+            df['Monthly_Trend_Up'] = False
+            df['Monthly_Trend_Strength'] = 0
         
         return df
     
+    def check_higher_timeframe_trend(self, df: pd.DataFrame, position: int) -> Tuple[bool, str]:
+        """Check if higher timeframe trend is bullish - CRITICAL FILTER"""
+        try:
+            # Check Weekly trend
+            weekly_trend_up = df.iloc[position]['Weekly_Trend_Up']
+            weekly_strength = df.iloc[position]['Weekly_Trend_Strength']
+            
+            if pd.isna(weekly_trend_up) or not weekly_trend_up:
+                return False, "Weekly trend not bullish"
+            
+            # Check if weekly trend is strong enough
+            if weekly_strength < self.config.weekly_trend_strength:
+                return False, f"Weekly trend too weak: {weekly_strength:.2%}"
+            
+            # Check Monthly trend
+            monthly_trend_up = df.iloc[position]['Monthly_Trend_Up']
+            monthly_strength = df.iloc[position]['Monthly_Trend_Strength']
+            
+            if pd.isna(monthly_trend_up):
+                # If monthly data not available, only use weekly
+                return True, "Weekly trend bullish"
+            
+            if not monthly_trend_up:
+                return False, "Monthly trend not bullish"
+            
+            # Check if monthly trend is strong enough
+            if monthly_strength < self.config.monthly_trend_strength:
+                return False, f"Monthly trend too weak: {monthly_strength:.2%}"
+            
+            return True, "Weekly and Monthly trend bullish"
+            
+        except Exception as e:
+            logger.debug(f"Error in higher timeframe check: {e}")
+            return False, f"Error: {str(e)}"
+    
     def check_broom_setup(self, df: pd.DataFrame, position: int) -> bool:
-        """Check broom setup conditions - FIXED to use integer position"""
+        """Check broom setup conditions with higher timeframe filter"""
         if position < self.config.base_lookback_period:
             return False
         
         try:
-            # Use .iloc for integer position
             current_price = df.iloc[position]['Close']
             if pd.isna(current_price) or current_price <= 0:
                 return False
             
-            # 1. Macro Trend Filter
-            weekly_ema = df.iloc[position]['Weekly_200_EMA']
-            if not pd.isna(weekly_ema) and current_price <= weekly_ema:
+            # CRITICAL: Check higher timeframe trend first
+            trend_ok, trend_reason = self.check_higher_timeframe_trend(df, position)
+            if not trend_ok:
+                logger.debug(f"Failed trend filter: {trend_reason}")
                 return False
             
-            monthly_ema = df.iloc[position]['Monthly_200_EMA']
-            if not pd.isna(monthly_ema) and current_price <= monthly_ema:
-                return False
-            
-            # 2. EMA Broom Compression
+            # 1. EMA Broom Compression
             ema_values = []
             for period in self.config.ema_periods:
                 ema_val = df.iloc[position][f'EMA_{period}']
@@ -436,9 +487,10 @@ class BroomBreakoutBacktest:
             ema_spread = (ema_high - ema_low) / current_price
             
             if ema_spread >= self.config.broom_compression_threshold:
+                logger.debug(f"Failed compression: {ema_spread:.2%}")
                 return False
             
-            # 3. Base Duration Check
+            # 2. Base Duration Check
             lookback_start = max(0, position - self.config.base_lookback_period)
             lookback_data = df.iloc[lookback_start:position]
             
@@ -446,22 +498,23 @@ class BroomBreakoutBacktest:
                 return False
             
             peak_position = lookback_data['High'].idxmax()
-            # Convert peak index to position
             peak_pos = df.index.get_loc(peak_position)
             days_since_peak = position - peak_pos
             
             if days_since_peak < self.config.base_duration_min or \
                days_since_peak > self.config.base_duration_max:
+                logger.debug(f"Failed base duration: {days_since_peak} days")
                 return False
             
-            # 4. Flat Box Consolidation
+            # 3. Flat Box Consolidation
             recent_20 = df.iloc[position-19:position+1]
             box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
             
             if box_height >= self.config.box_consolidation_height:
+                logger.debug(f"Failed box height: {box_height:.2%}")
                 return False
             
-            # 5. Prior Trend Exhaustion
+            # 4. Prior Trend Exhaustion
             pre_peak_start = max(0, peak_pos - self.config.base_lookback_period)
             pre_peak_data = df.iloc[pre_peak_start:peak_pos+1]
             
@@ -473,16 +526,18 @@ class BroomBreakoutBacktest:
                     run_up = (peak_price - lowest_low) / lowest_low
                     
                     if run_up > self.config.prior_trend_exhaustion_limit:
+                        logger.debug(f"Failed trend exhaustion: {run_up:.2%}")
                         return False
             
+            logger.debug(f"✓ Broom setup found with {trend_reason}")
             return True
             
         except Exception as e:
-            logger.debug(f"Error in broom setup at position {position}: {str(e)}")
+            logger.debug(f"Error in broom setup: {e}")
             return False
     
     def calculate_volume_profile_poc(self, df: pd.DataFrame, position: int) -> Optional[float]:
-        """Calculate Volume Profile POC - FIXED to use integer position"""
+        """Calculate Volume Profile POC"""
         if position < self.config.poc_lookback:
             return None
         
@@ -525,11 +580,10 @@ class BroomBreakoutBacktest:
             return poc_price
             
         except Exception as e:
-            logger.debug(f"Error in POC calculation: {e}")
             return None
     
     def check_entry_signal(self, df: pd.DataFrame, position: int) -> bool:
-        """Check entry trigger conditions - FIXED to use integer position"""
+        """Check entry trigger conditions"""
         try:
             current_price = df.iloc[position]['Close']
             
@@ -539,6 +593,7 @@ class BroomBreakoutBacktest:
             
             # Check breakout above highest EMA
             if current_price <= highest_ema:
+                logger.debug(f"Failed EMA breakout: {current_price:.2f} <= {highest_ema:.2f}")
                 return False
             
             # Calculate Volume Profile POC
@@ -549,6 +604,7 @@ class BroomBreakoutBacktest:
             # Check breakout above POC
             poc_threshold = poc_price * 0.98
             if current_price <= poc_threshold:
+                logger.debug(f"Failed POC breakout: {current_price:.2f} <= {poc_threshold:.2f}")
                 return False
             
             # Volume confirmation
@@ -559,8 +615,10 @@ class BroomBreakoutBacktest:
             current_volume = df.iloc[position]['Volume']
             
             if current_volume <= self.config.volume_threshold_multiplier * volume_ma:
+                logger.debug(f"Failed volume: {current_volume:.0f} <= {self.config.volume_threshold_multiplier * volume_ma:.0f}")
                 return False
             
+            logger.debug("✓ Entry signal triggered")
             return True
             
         except Exception as e:
@@ -568,46 +626,43 @@ class BroomBreakoutBacktest:
             return False
     
     def run_backtest(self, df: pd.DataFrame, ticker: str = "") -> List[Dict]:
-        """Run backtest on single stock - FIXED index handling"""
+        """Run backtest on single stock"""
         trades = []
         position = None
         
         try:
-            # Calculate indicators
             df = self.calculate_emas(df)
             df = self.create_higher_timeframes(df)
             
-            # Get backtest period data
             backtest_mask = df.index >= self.config.backtest_start
             backtest_df = df[backtest_mask].copy()
             
             if len(backtest_df) < 50:
                 return trades
             
-            logger.debug(f"Running backtest on {len(backtest_df)} days for {ticker}")
-            
-            # Track setup signals
             setup_count = 0
+            trend_filter_count = 0
             entry_count = 0
             
-            # Iterate through positions
             for date_idx in backtest_df.index:
-                # Get integer position in full dataframe
                 position_idx = df.index.get_loc(date_idx)
                 
                 if position is None:
-                    # Check for setup and entry
+                    # Check higher timeframe trend
+                    trend_ok, trend_reason = self.check_higher_timeframe_trend(df, position_idx)
+                    if not trend_ok:
+                        trend_filter_count += 1
+                        continue
+                    
+                    # Check broom setup
                     if self.check_broom_setup(df, position_idx):
                         setup_count += 1
                         if self.check_entry_signal(df, position_idx):
                             entry_count += 1
-                            
-                            # Get values using .iloc
                             entry_price = df.iloc[position_idx]['Close']
                             ema_200 = df.iloc[position_idx]['EMA_200']
                             stop_loss = ema_200 * (1 - self.config.stop_loss_buffer)
                             
-                            # Calculate take profit
                             lookback_start = max(0, position_idx - self.config.base_lookback_period)
                             lookback_data = df.iloc[lookback_start:position_idx]
                             
@@ -626,15 +681,16 @@ class BroomBreakoutBacktest:
                                 'stop_loss': stop_loss,
                                 'take_profit': take_profit,
                                 'base_depth': base_depth,
-                                'entry_position': position_idx
+                                'entry_position': position_idx,
+                                'trend_reason': trend_reason
                             }
                             
-                            logger.info(f"🚀 ENTRY: {ticker} at {date_idx.date()} | Price: {entry_price:.2f} | "
-                                      f"Stop: {stop_loss:.2f} | Target: {take_profit:.2f}")
+                            logger.info(f"🚀 ENTRY: {ticker} at {date_idx.date()} | "
+                                      f"Price: {entry_price:.2f} | Target: {take_profit:.2f} | {trend_reason}")
                             
                             if self.trade_log_file:
                                 self.trade_log_file.write(
-                                    f"ENTRY,{ticker},{date_idx.date()},{entry_price:.2f},{stop_loss:.2f},{take_profit:.2f}\n"
+                                    f"ENTRY,{ticker},{date_idx.date()},{entry_price:.2f},{stop_loss:.2f},{take_profit:.2f},{trend_reason}\n"
                                 )
                                 self.trade_log_file.flush()
                 else:
@@ -644,12 +700,10 @@ class BroomBreakoutBacktest:
                     current_low = df.iloc[position_idx]['Low']
                     ema_200 = df.iloc[position_idx]['EMA_200']
                     
-                    # Update trailing stop
                     new_stop = ema_200 * (1 - self.config.stop_loss_buffer)
                     if new_stop > position['stop_loss']:
                         position['stop_loss'] = new_stop
                     
-                    # Check stop loss
                     if current_low <= position['stop_loss']:
                         exit_price = position['stop_loss']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -666,8 +720,7 @@ class BroomBreakoutBacktest:
                             'days_held': days_held
                         })
                         
-                        logger.info(f"🛑 EXIT (Stop Loss): {ticker} at {date_idx.date()} | "
-                                  f"Return: {return_pct:.2f}% | Days: {days_held}")
+                        logger.info(f"🛑 EXIT (Stop): {ticker} | Return: {return_pct:.2f}% | Days: {days_held}")
                         
                         if self.trade_log_file:
                             self.trade_log_file.write(
@@ -678,7 +731,6 @@ class BroomBreakoutBacktest:
                         position = None
                         continue
                     
-                    # Check take profit
                     if current_high >= position['take_profit']:
                         exit_price = position['take_profit']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -695,8 +747,7 @@ class BroomBreakoutBacktest:
                             'days_held': days_held
                         })
                         
-                        logger.info(f"🎯 EXIT (Take Profit): {ticker} at {date_idx.date()} | "
-                                  f"Return: {return_pct:.2f}% | Days: {days_held}")
+                        logger.info(f"🎯 EXIT (Target): {ticker} | Return: {return_pct:.2f}% | Days: {days_held}")
                         
                         if self.trade_log_file:
                             self.trade_log_file.write(
@@ -706,7 +757,6 @@ class BroomBreakoutBacktest:
                         
                         position = None
             
-            # Close open position
             if position is not None:
                 last_date = backtest_df.index[-1]
                 last_position = df.index.get_loc(last_date)
@@ -725,13 +775,13 @@ class BroomBreakoutBacktest:
                     'days_held': days_held
                 })
             
-            if setup_count > 0 or len(trades) > 0:
-                logger.info(f"📊 {ticker}: {setup_count} setups, {entry_count} entries, {len(trades)} trades")
+            if setup_count > 0 or trend_filter_count > 0:
+                logger.info(f"📊 {ticker}: {trend_filter_count} trend-filtered, {setup_count} setups, {entry_count} entries, {len(trades)} trades")
             
             return trades
             
         except Exception as e:
-            logger.error(f"Error in backtest for {ticker}: {str(e)}", exc_info=True)
+            logger.debug(f"Error in backtest for {ticker}: {e}")
             return trades
     
     def calculate_performance_metrics(self, trades: List[Dict]) -> Dict:
@@ -853,7 +903,7 @@ class BroomBreakoutBacktest:
                                   f"Win Rate: {metrics['win_rate']:.1f}%, "
                                   f"Return: {metrics['total_return']:.1f}%")
                     else:
-                        logger.info(f"  ✓ No trades generated")
+                        logger.info(f"  ✓ No qualifying trades")
                     
                     del df, trades
                     gc.collect()
@@ -901,7 +951,6 @@ class BroomBreakoutBacktest:
         
         output_path = self.config.results_dir / filename
         results_df.to_csv(output_path, index=False)
-        
         results_df.to_csv(filename, index=False)
         
         logger.info(f"\nResults exported to {output_path}")
@@ -931,26 +980,17 @@ class BroomBreakoutBacktest:
 # ==================== NIFTY 500 UNIVERSE ====================
 
 def get_nifty500_tickers() -> List[str]:
-    """Get list of Nifty 500 tickers"""
+    """Get list of Nifty 500 tickers - testing with 20 stocks"""
     
     nifty_500 = [
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
         'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
         'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
-        'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS', 'CIPLA.NS',
-        'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
-        'GAIL.NS', 'GRASIM.NS', 'HCLTECH.NS', 'HDFCLIFE.NS',
-        'HEROMOTOCO.NS', 'HINDALCO.NS', 'HINDZINC.NS', 'ICICIPRULI.NS',
-        'INDUSINDBK.NS', 'IOC.NS', 'JSWSTEEL.NS', 'LTIM.NS',
-        'M&M.NS', 'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS',
-        'SBILIFE.NS', 'SHRIRAMFIN.NS', 'SIEMENS.NS', 'TATACONSUM.NS',
-        'TATAMOTORS.NS', 'TATASTEEL.NS', 'TECHM.NS', 'UPL.NS', 'VEDL.NS',
     ]
     
     if config.universe_size < len(nifty_500):
-        logger.info(f"Using subset of {config.universe_size} stocks from Nifty 500")
+        logger.info(f"Using subset of {config.universe_size} stocks")
         nifty_500 = nifty_500[:config.universe_size]
     
     return nifty_500
@@ -962,14 +1002,13 @@ def main():
     try:
         logger.info("=" * 80)
         logger.info("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-        logger.info("Nifty 500 Universe Backtesting Engine - FIXED VERSION")
+        logger.info("Nifty 500 Universe - Corrected Trend Filters")
         logger.info("=" * 80)
         
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Pandas version: {pd.__version__}")
         logger.info(f"Numpy version: {np.__version__}")
         logger.info(f"Working directory: {os.getcwd()}")
-        logger.info(f"GitHub Actions: {config.is_github_actions}")
         
         tickers = get_nifty500_tickers()
         logger.info(f"\nUniverse size: {len(tickers)} stocks")
@@ -984,27 +1023,10 @@ def main():
         logger.info("BACKTEST COMPLETED SUCCESSFULLY")
         logger.info("=" * 80)
         
-        if config.is_github_actions:
-            print("\n✅ Backtest completed successfully!")
-            print(f"Results saved to: nifty500_broom_breakout_results.csv")
-            
-            if not results_df.empty:
-                processed = results_df[results_df['processed'] == True]
-                if len(processed) > 0:
-                    print(f"\n📊 Summary:")
-                    print(f"  - Stocks processed: {len(processed)}")
-                    print(f"  - Total trades: {processed['total_trades'].sum()}")
-                    print(f"  - Average win rate: {processed['win_rate'].mean():.2f}%")
-                    print(f"  - Average return: {processed['total_return'].mean():.2f}%")
-        
         return results_df
         
     except Exception as e:
         logger.error(f"Fatal error in main: {str(e)}", exc_info=True)
-        
-        if config.is_github_actions:
-            print(f"\n❌ Backtest failed: {str(e)}")
-        
         sys.exit(1)
 
 if __name__ == "__main__":
