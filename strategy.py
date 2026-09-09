@@ -1,7 +1,6 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
 For Nifty 500 Universe - GitHub Actions Optimized Version
-Author: Quantitative Developer
 """
 
 import pandas as pd
@@ -19,6 +18,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import json
 from pathlib import Path
+from io import StringIO
 
 warnings.filterwarnings('ignore')
 
@@ -97,15 +97,6 @@ class Config:
         
         if self.base_duration_min >= self.base_duration_max:
             raise ValueError("BASE_DURATION_MIN must be less than BASE_DURATION_MAX")
-        
-        logger.info(f"Configuration loaded:")
-        logger.info(f"  Environment: {'GitHub Actions' if self.is_github_actions else 'Local'}")
-        logger.info(f"  Universe size: {self.universe_size}")
-        logger.info(f"  Batch size: {self.batch_size}")
-        logger.info(f"  Backtest start: {self.backtest_start}")
-        logger.info(f"  Data start: {self.data_start}")
-        logger.info(f"  Alpha Vantage key: {'Configured' if self.alpha_vantage_api_key else 'Not configured'}")
-        logger.info(f"  Cache enabled: {self.cache_enabled}")
 
 # ==================== LOGGING SETUP ====================
 
@@ -164,8 +155,6 @@ class DataFetcher:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json,text/plain,*/*',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Origin': 'https://finance.yahoo.com',
-            'Referer': 'https://finance.yahoo.com/',
         })
         
         return session
@@ -177,16 +166,14 @@ class DataFetcher:
             
             logger.debug(f"Fetching {ticker} from yfinance")
             
-            # Create ticker with custom session
             stock = yf.Ticker(ticker, session=self.session)
             
-            # Get history
             df = stock.history(
                 start=start_date,
                 end=datetime.now().strftime('%Y-%m-%d'),
                 auto_adjust=False,
                 timeout=30,
-                actions=False  # Disable dividends/splits for speed
+                actions=False
             )
             
             if df is not None and not df.empty:
@@ -210,7 +197,7 @@ class DataFetcher:
             return None
     
     def fetch_from_stooq(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
-        """Fetch data from Stooq"""
+        """Fetch data from Stooq directly via HTTP"""
         try:
             # Convert ticker format for Stooq
             if ticker.endswith('.NS'):
@@ -228,7 +215,7 @@ class DataFetcher:
             response = self.session.get(url, timeout=30)
             
             if response.status_code == 200:
-                df = pd.read_csv(pd.StringIO(response.text))
+                df = pd.read_csv(StringIO(response.text))
                 
                 if not df.empty and 'Close' in df.columns:
                     df['Date'] = pd.to_datetime(df['Date'])
@@ -279,11 +266,9 @@ class DataFetcher:
                     df.index = pd.to_datetime(df.index)
                     df.sort_index(inplace=True)
                     
-                    # Rename columns
                     df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                     df = df.astype(float)
                     
-                    # Filter to start date
                     df = df[df.index >= start_date]
                     
                     if len(df) > 100:
@@ -299,80 +284,18 @@ class DataFetcher:
             logger.debug(f"Alpha Vantage failed for {ticker}: {str(e)}")
             return None
     
-    def fetch_from_nse_india(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
-        """Fetch from NSE India directly"""
-        try:
-            nse_symbol = ticker.replace('.NS', '').replace('.BO', '')
-            
-            logger.debug(f"Fetching {ticker} from NSE India as {nse_symbol}")
-            
-            # NSE API endpoint
-            from_date = datetime.strptime(start_date, '%Y-%m-%d').strftime('%d-%m-%Y')
-            to_date = datetime.now().strftime('%d-%m-%Y')
-            
-            url = f"https://www.nseindia.com/api/historical/cm/equity?symbol={nse_symbol}&series=[%22EQ%22]&from={from_date}&to={to_date}"
-            
-            # First get cookies
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json,text/plain,*/*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://www.nseindia.com/',
-            }
-            
-            session = requests.Session()
-            session.headers.update(headers)
-            session.get('https://www.nseindia.com/', timeout=30)
-            
-            # Fetch data
-            response = session.get(url, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if 'data' in data:
-                    df = pd.DataFrame(data['data'])
-                    df['Date'] = pd.to_datetime(df['CH_TIMESTAMP'])
-                    df.set_index('Date', inplace=True)
-                    
-                    # Map columns
-                    column_mapping = {
-                        'CH_OPENING_PRICE': 'Open',
-                        'CH_TRADE_HIGH_PRICE': 'High',
-                        'CH_TRADE_LOW_PRICE': 'Low',
-                        'CH_CLOSING_PRICE': 'Close',
-                        'CH_TOT_TRADED_QTY': 'Volume'
-                    }
-                    
-                    df = df.rename(columns=column_mapping)
-                    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].astype(float)
-                    df.sort_index(inplace=True)
-                    
-                    if len(df) > 100:
-                        logger.info(f"✓ NSE India: {len(df)} rows for {ticker}")
-                        return df
-            
-            return None
-            
-        except Exception as e:
-            logger.debug(f"NSE India failed for {ticker}: {str(e)}")
-            return None
-    
     def fetch_with_fallback(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data with multiple source fallback"""
         
-        # Check if rate limited
         if self.rate_limit_hits >= 3:
             logger.warning(f"Multiple rate limit hits ({self.rate_limit_hits}). Waiting 60 seconds...")
             time.sleep(60)
             self.rate_limit_hits = 0
         
-        # Data sources in order of preference
         data_sources = [
             ('yfinance', self.fetch_from_yfinance),
             ('stooq', self.fetch_from_stooq),
             ('alpha_vantage', self.fetch_from_alpha_vantage),
-            ('nse_india', self.fetch_from_nse_india),
         ]
         
         for source_name, fetch_func in data_sources:
@@ -389,10 +312,8 @@ class DataFetcher:
                 if "429" in str(e):
                     self.rate_limit_hits += 1
         
-        # All sources failed
         self.consecutive_failures += 1
         
-        # If too many consecutive failures, wait longer
         if self.consecutive_failures >= 5:
             logger.warning(f"{self.consecutive_failures} consecutive failures. Waiting 120 seconds...")
             time.sleep(120)
@@ -410,7 +331,6 @@ class BroomBreakoutBacktest:
         self.results = []
         self.data_fetcher = DataFetcher(config)
         
-        # Performance tracking
         self.start_time = time.time()
         self.stocks_processed = 0
         self.stocks_failed = 0
@@ -441,7 +361,6 @@ class BroomBreakoutBacktest:
             cache_file = self.config.data_dir / f"{ticker.replace('.', '_')}.csv"
             
             if cache_file.exists():
-                # Check cache age
                 file_age = time.time() - cache_file.stat().st_mtime
                 
                 if file_age < self.config.cache_expiry_days * 24 * 3600:
@@ -457,15 +376,12 @@ class BroomBreakoutBacktest:
     
     def download_data(self, ticker: str) -> Optional[pd.DataFrame]:
         """Download data with caching"""
-        # Try cache first
         df = self.load_from_cache(ticker)
         if df is not None:
             return df
         
-        # Fetch from sources
         df = self.data_fetcher.fetch_with_fallback(ticker, self.config.data_start)
         
-        # Cache if successful
         if df is not None and not df.empty:
             self.save_to_cache(ticker, df)
         
@@ -480,7 +396,6 @@ class BroomBreakoutBacktest:
     def create_higher_timeframes(self, df: pd.DataFrame) -> pd.DataFrame:
         """Create weekly and monthly timeframes"""
         try:
-            # Weekly resampling
             weekly_df = df.resample('W-FRI').agg({
                 'Open': 'first',
                 'High': 'max',
@@ -493,7 +408,6 @@ class BroomBreakoutBacktest:
                 span=self.config.weekly_ema_period, adjust=False
             ).mean()
             
-            # Monthly resampling
             monthly_df = df.resample('ME').agg({
                 'Open': 'first',
                 'High': 'max',
@@ -506,7 +420,6 @@ class BroomBreakoutBacktest:
                 span=self.config.monthly_ema_period, adjust=False
             ).mean()
             
-            # Map back to daily
             df['Weekly_200_EMA'] = weekly_df[f'EMA_{self.config.weekly_ema_period}_Weekly'].reindex(
                 df.index, method='ffill'
             )
@@ -516,7 +429,6 @@ class BroomBreakoutBacktest:
             
         except Exception as e:
             logger.error(f"Error creating higher timeframes: {e}")
-            # Add empty columns if failed
             df['Weekly_200_EMA'] = np.nan
             df['Monthly_200_EMA'] = np.nan
         
@@ -532,7 +444,6 @@ class BroomBreakoutBacktest:
             if pd.isna(current_price) or current_price <= 0:
                 return False
             
-            # 1. Macro Trend Filter
             weekly_ema = df.loc[idx, 'Weekly_200_EMA']
             if pd.isna(weekly_ema) or current_price <= weekly_ema:
                 return False
@@ -541,7 +452,6 @@ class BroomBreakoutBacktest:
             if not pd.isna(monthly_ema) and current_price <= monthly_ema:
                 return False
             
-            # 2. EMA Broom Compression
             ema_values = []
             for period in self.config.ema_periods:
                 ema_val = df.loc[idx, f'EMA_{period}']
@@ -556,7 +466,6 @@ class BroomBreakoutBacktest:
             if ema_spread >= self.config.broom_compression_threshold:
                 return False
             
-            # 3. Base Duration Check
             lookback_data = df.iloc[max(0, idx - self.config.base_lookback_period):idx]
             if len(lookback_data) < self.config.base_lookback_period:
                 return False
@@ -570,14 +479,12 @@ class BroomBreakoutBacktest:
                days_since_peak > self.config.base_duration_max:
                 return False
             
-            # 4. Flat Box Consolidation
             recent_20 = df.iloc[idx-19:idx+1]
             box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
             
             if box_height >= self.config.box_consolidation_height:
                 return False
             
-            # 5. Prior Trend Exhaustion Limit
             pre_peak_data = df.iloc[max(0, peak_position - self.config.base_lookback_period):peak_position+1]
             if len(pre_peak_data) > 0:
                 lowest_low = pre_peak_data['Low'].min()
@@ -645,22 +552,18 @@ class BroomBreakoutBacktest:
         try:
             current_price = df.loc[idx, 'Close']
             
-            # Get highest EMA
             ema_values = [df.loc[idx, f'EMA_{period}'] for period in self.config.ema_periods]
             highest_ema = max(ema_values)
             
-            # Calculate Volume Profile POC
             poc_price = self.calculate_volume_profile_poc(df, idx)
             if poc_price is None:
                 return False
             
-            # Check breakout conditions
             if current_price <= highest_ema:
                 return False
             if current_price <= poc_price:
                 return False
             
-            # Volume confirmation
             if idx < self.config.volume_ma_period:
                 return False
             
@@ -682,11 +585,9 @@ class BroomBreakoutBacktest:
         position = None
         
         try:
-            # Calculate indicators
             df = self.calculate_emas(df)
             df = self.create_higher_timeframes(df)
             
-            # Slice to backtest period
             backtest_df = df[df.index >= self.config.backtest_start].copy()
             
             if len(backtest_df) < 50:
@@ -698,13 +599,11 @@ class BroomBreakoutBacktest:
                 position_idx = df.index.get_loc(idx)
                 
                 if position is None:
-                    # Check for setup and entry
                     if self.check_broom_setup(df, position_idx):
                         if self.check_entry_signal(df, position_idx):
                             entry_price = df.loc[idx, 'Close']
                             stop_loss = df.loc[idx, 'EMA_200'] * (1 - self.config.stop_loss_buffer)
                             
-                            # Calculate take profit
                             lookback_data = df.iloc[max(0, position_idx - self.config.base_lookback_period):position_idx]
                             peak_price = lookback_data['High'].max()
                             peak_pos = df.index.get_loc(lookback_data['High'].idxmax())
@@ -723,18 +622,15 @@ class BroomBreakoutBacktest:
                             
                             logger.debug(f"Entry: {idx.date()} @ {entry_price:.2f}")
                 else:
-                    # Manage existing position
                     current_price = df.loc[idx, 'Close']
                     current_high = df.loc[idx, 'High']
                     current_low = df.loc[idx, 'Low']
                     ema_200 = df.loc[idx, 'EMA_200']
                     
-                    # Update trailing stop
                     new_stop = ema_200 * (1 - self.config.stop_loss_buffer)
                     if new_stop > position['stop_loss']:
                         position['stop_loss'] = new_stop
                     
-                    # Check stop loss
                     if current_low <= position['stop_loss']:
                         exit_price = position['stop_loss']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -753,7 +649,6 @@ class BroomBreakoutBacktest:
                         position = None
                         continue
                     
-                    # Check take profit
                     if current_high >= position['take_profit']:
                         exit_price = position['take_profit']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -771,7 +666,6 @@ class BroomBreakoutBacktest:
                         logger.debug(f"Exit (Take Profit): {idx.date()} Return: {return_pct:.2f}%")
                         position = None
             
-            # Close open position at end
             if position is not None:
                 last_idx = backtest_df.index[-1]
                 last_price = backtest_df.loc[last_idx, 'Close']
@@ -812,7 +706,6 @@ class BroomBreakoutBacktest:
             winning_trades = len(trades_df[trades_df['return_pct'] > 0])
             win_rate = (winning_trades / total_trades) * 100
             
-            # Calculate returns
             cumulative_return = 100.0
             equity_curve = [100.0]
             
@@ -823,13 +716,11 @@ class BroomBreakoutBacktest:
             
             total_return = cumulative_return - 100
             
-            # Calculate drawdown
             equity_series = pd.Series(equity_curve)
             max_drawdown = ((equity_series.cummax() - equity_series) / equity_series.cummax()).max() * 100
             
             avg_return_per_trade = trades_df['return_pct'].mean()
             
-            # Profit factor
             gross_profit = trades_df[trades_df['return_pct'] > 0]['return_pct'].sum()
             gross_loss = abs(trades_df[trades_df['return_pct'] < 0]['return_pct'].sum())
             profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
@@ -862,7 +753,6 @@ class BroomBreakoutBacktest:
         logger.info(f"Backtest period: {self.config.backtest_start} to present")
         logger.info("=" * 80)
         
-        # Process in batches
         for batch_start in range(0, len(ticker_list), self.config.batch_size):
             batch_end = min(batch_start + self.config.batch_size, len(ticker_list))
             batch = ticker_list[batch_start:batch_end]
@@ -876,7 +766,6 @@ class BroomBreakoutBacktest:
                 try:
                     logger.info(f"\n[{global_idx+1}/{len(ticker_list)}] Processing {ticker}...")
                     
-                    # Download data
                     df = self.download_data(ticker)
                     
                     if df is None or len(df) < 300:
@@ -895,10 +784,8 @@ class BroomBreakoutBacktest:
                         self.stocks_failed += 1
                         continue
                     
-                    # Run backtest
                     trades = self.run_backtest(df)
                     
-                    # Calculate metrics
                     metrics = self.calculate_performance_metrics(trades)
                     metrics['ticker'] = ticker
                     metrics['processed'] = True
@@ -908,186 +795,6 @@ class BroomBreakoutBacktest:
                     self.stocks_processed += 1
                     self.total_trades += len(trades)
                     
-                    # Log results
                     if trades:
                         logger.info(f"  ✓ {metrics['total_trades']} trades, "
-                                  f"Win Rate: {metrics['win_rate']:.1f}%, "
-                                  f"Return: {metrics['total_return']:.1f}%")
-                    else:
-                        logger.info(f"  ✓ No trades generated")
-                    
-                    # Clear memory
-                    del df, trades
-                    gc.collect()
-                    
-                    # Add delay
-                    time.sleep(self.config.request_delay)
-                    
-                except Exception as e:
-                    logger.error(f"  ✗ Error processing {ticker}: {str(e)}")
-                    self.results.append({
-                        'ticker': ticker,
-                        'total_trades': 0,
-                        'win_rate': 0,
-                        'total_return': 0,
-                        'max_drawdown': 0,
-                        'avg_return_per_trade': 0,
-                        'profit_factor': 0,
-                        'processed': False,
-                        'reason': f'error: {str(e)}'
-                    })
-                    self.stocks_failed += 1
-            
-            # Add delay between batches
-            if batch_end < len(ticker_list):
-                logger.info(f"\nBatch complete. Waiting {self.config.batch_delay} seconds...")
-                time.sleep(self.config.batch_delay)
-        
-        # Log final summary
-        elapsed_time = time.time() - self.start_time
-        logger.info("\n" + "=" * 80)
-        logger.info("BACKTEST COMPLETED")
-        logger.info(f"Stocks processed: {self.stocks_processed}/{len(ticker_list)}")
-        logger.info(f"Stocks failed: {self.stocks_failed}")
-        logger.info(f"Total trades: {self.total_trades}")
-        logger.info(f"Time elapsed: {elapsed_time/60:.2f} minutes")
-        logger.info("=" * 80)
-        
-        return self.results
-    
-    def export_results(self, filename: str = 'nifty500_broom_breakout_results.csv') -> pd.DataFrame:
-        """Export results to CSV"""
-        results_df = pd.DataFrame(self.results)
-        
-        if results_df.empty:
-            logger.error("No results to export")
-            return pd.DataFrame()
-        
-        # Save to results directory
-        output_path = self.config.results_dir / filename
-        results_df.to_csv(output_path, index=False)
-        
-        # Also save to root for GitHub Actions artifact
-        results_df.to_csv(filename, index=False)
-        
-        logger.info(f"\nResults exported to {output_path}")
-        logger.info(f"Total records: {len(results_df)}")
-        
-        # Print summary
-        processed_df = results_df[results_df['processed'] == True]
-        if len(processed_df) > 0:
-            logger.info("\n=== SUMMARY STATISTICS ===")
-            logger.info(f"Stocks processed: {len(processed_df)}")
-            logger.info(f"Stocks with trades: {len(processed_df[processed_df['total_trades'] > 0])}")
-            logger.info(f"Total trades: {processed_df['total_trades'].sum()}")
-            logger.info(f"Average win rate: {processed_df['win_rate'].mean():.2f}%")
-            logger.info(f"Average return: {processed_df['total_return'].mean():.2f}%")
-            logger.info(f"Average max drawdown: {processed_df['max_drawdown'].mean():.2f}%")
-            
-            # Top performers
-            stocks_with_trades = processed_df[processed_df['total_trades'] > 0]
-            if len(stocks_with_trades) > 0:
-                top_performers = stocks_with_trades.nlargest(10, 'total_return')[
-                    ['ticker', 'total_return', 'win_rate', 'total_trades']
-                ]
-                logger.info("\n=== TOP 10 PERFORMERS ===")
-                for _, row in top_performers.iterrows():
-                    logger.info(f"  {row['ticker']}: {row['total_return']:.1f}% return, "
-                              f"{row['win_rate']:.1f}% win rate, {row['total_trades']} trades")
-        
-        return results_df
-
-# ==================== NIFTY 500 UNIVERSE ====================
-
-def get_nifty500_tickers() -> List[str]:
-    """Get list of Nifty 500 tickers"""
-    
-    # Complete list of Nifty 500 stocks (as of 2024)
-    # Note: This is a sample - you should update with the full list
-    nifty_500 = [
-        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
-        'BAJFINANCE.NS', 'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS',
-        'CIPLA.NS', 'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS',
-        'EICHERMOT.NS', 'GAIL.NS', 'GRASIM.NS', 'HCLTECH.NS',
-        'HDFC.NS', 'HDFCLIFE.NS', 'HEROMOTOCO.NS', 'HINDALCO.NS',
-        'HINDZINC.NS', 'ICICIPRULI.NS', 'INDUSINDBK.NS', 'IOC.NS',
-        'JSWSTEEL.NS', 'LTIM.NS', 'M&M.NS', 'NTPC.NS', 'ONGC.NS',
-        'POWERGRID.NS', 'SBILIFE.NS', 'SHRIRAMFIN.NS', 'SIEMENS.NS',
-        'TATACONSUM.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'TECHM.NS',
-        'UPL.NS', 'VEDL.NS',
-        # Add more Nifty 500 stocks here...
-    ]
-    
-    # Apply universe size limit if specified
-    if config.universe_size < len(nifty_500):
-        logger.info(f"Using subset of {config.universe_size} stocks from Nifty 500")
-        nifty_500 = nifty_500[:config.universe_size]
-    
-    return nifty_500
-
-# ==================== MAIN EXECUTION ====================
-
-def main():
-    """Main execution function"""
-    try:
-        logger.info("=" * 80)
-        logger.info("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-        logger.info("Nifty 500 Universe Backtesting Engine")
-        logger.info("=" * 80)
-        
-        # Log environment info
-        logger.info(f"Python version: {sys.version}")
-        logger.info(f"Pandas version: {pd.__version__}")
-        logger.info(f"Numpy version: {np.__version__}")
-        logger.info(f"Working directory: {os.getcwd()}")
-        logger.info(f"GitHub Actions: {config.is_github_actions}")
-        logger.info(f"Alpha Vantage key configured: {bool(config.alpha_vantage_api_key)}")
-        
-        # Get universe
-        tickers = get_nifty500_tickers()
-        logger.info(f"\nUniverse size: {len(tickers)} stocks")
-        
-        # Initialize backtest engine
-        engine = BroomBreakoutBacktest(config)
-        
-        # Run backtest
-        results = engine.run_universe_backtest(tickers)
-        
-        # Export results
-        results_df = engine.export_results()
-        
-        # Final summary
-        logger.info("\n" + "=" * 80)
-        logger.info("BACKTEST COMPLETED SUCCESSFULLY")
-        logger.info("=" * 80)
-        
-        # Print to stdout for GitHub Actions
-        if config.is_github_actions:
-            print("\n✅ Backtest completed successfully!")
-            print(f"Results saved to: nifty500_broom_breakout_results.csv")
-            
-            if not results_df.empty:
-                processed = results_df[results_df['processed'] == True]
-                if len(processed) > 0:
-                    print(f"\n📊 Summary:")
-                    print(f"  - Stocks processed: {len(processed)}")
-                    print(f"  - Total trades: {processed['total_trades'].sum()}")
-                    print(f"  - Average win rate: {processed['win_rate'].mean():.2f}%")
-                    print(f"  - Average return: {processed['total_return'].mean():.2f}%")
-        
-        return results_df
-        
-    except Exception as e:
-        logger.error(f"Fatal error in main: {str(e)}", exc_info=True)
-        
-        if config.is_github_actions:
-            print(f"\n❌ Backtest failed: {str(e)}")
-        
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+                                  f"Win Rate: {
