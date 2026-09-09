@@ -1,5 +1,6 @@
 """
-Trade Generator - Uses learned parameters to generate current trade signals
+UPDATED Trade Generator - Full Nifty 500 Universe
+Uses learned parameters to scan all 500 stocks
 """
 
 import pandas as pd
@@ -55,6 +56,98 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ==================== NIFTY 500 UNIVERSE ====================
+
+def get_nifty500_tickers() -> List[str]:
+    """Complete Nifty 500 stock list"""
+    return [
+        # Large Cap (Top 50)
+        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
+        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
+        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
+        'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS', 'CIPLA.NS',
+        'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
+        'GRASIM.NS', 'HCLTECH.NS', 'HDFCLIFE.NS', 'HEROMOTOCO.NS',
+        'HINDALCO.NS', 'INDUSINDBK.NS', 'JSWSTEEL.NS', 'M&M.NS',
+        'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS', 'SBILIFE.NS',
+        'SHRIRAMFIN.NS', 'TATACONSUM.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS',
+        'TECHM.NS', 'UPL.NS',
+        
+        # Mid Cap (51-200)
+        'ABB.NS', 'ACC.NS', 'ADANIGREEN.NS', 'ADANITRANS.NS', 'ALKEM.NS',
+        'AMBUJACEM.NS', 'APLAPOLLO.NS', 'ASHOKLEY.NS', 'ASTRAL.NS', 'ATGL.NS',
+        'AUROPHARMA.NS', 'BAJAJHLDNG.NS', 'BANKBARODA.NS', 'BANKINDIA.NS', 'BATAINDIA.NS',
+        'BEL.NS', 'BHARATFORG.NS', 'BHEL.NS', 'BIOCON.NS', 'BOSCHLTD.NS',
+        'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'CONCOR.NS', 'CROMPTON.NS',
+        'CUMMINSIND.NS', 'DABUR.NS', 'DALBHARAT.NS', 'DLF.NS', 'DMART.NS',
+        'ESCORTS.NS', 'FEDERALBNK.NS', 'FORTIS.NS', 'GAIL.NS', 'GICRE.NS',
+        'GLAND.NS', 'GODREJCP.NS', 'GODREJPROP.NS', 'HAVELLS.NS', 'HINDCOPPER.NS',
+        'HONAUT.NS', 'ICICIGI.NS', 'IDEA.NS', 'IDFCFIRSTB.NS', 'INDHOTEL.NS',
+        'IEX.NS', 'IGL.NS', 'INDUSTOWER.NS', 'IRCTC.NS', 'JINDALSTEL.NS',
+        'JUBLFOOD.NS', 'LICHSGFIN.NS', 'LUPIN.NS', 'M&MFIN.NS', 'MANAPPURAM.NS',
+        'MARICO.NS', 'MFSL.NS', 'MOTHERSON.NS', 'MPHASIS.NS', 'MRF.NS',
+        'MUTHOOTFIN.NS', 'NATIONALUM.NS', 'NAUKRI.NS', 'NAVINFLUOR.NS', 'NMDC.NS',
+        'OBEROIRLTY.NS', 'OFSS.NS', 'PAGEIND.NS', 'PEL.NS', 'PERSISTENT.NS',
+        'PETRONET.NS', 'PIDILITIND.NS', 'PIIND.NS', 'PNB.NS', 'POLYCAB.NS',
+        'POONAWALLA.NS', 'POWERFIN.NS', 'PRESTIGE.NS', 'RAMCOCEM.NS', 'RBLBANK.NS',
+        'RECLTD.NS', 'SAIL.NS', 'SBICARD.NS', 'SHREECEM.NS', 'SRF.NS',
+        'SUNTV.NS', 'SUPREMEIND.NS', 'TATAPOWER.NS', 'TORNTPHARM.NS', 'TRENT.NS',
+        'TVSMOTOR.NS', 'UBL.NS', 'UNITDSPR.NS', 'VBL.NS', 'VOLTAS.NS',
+        'YESBANK.NS', 'ZYDUSLIFE.NS',
+        
+        # Small Cap (201-500)
+        'AARTIIND.NS', 'ABBOTINDIA.NS', 'ABCAPITAL.NS', 'ABFRL.NS', 'ADANIPOWER.NS',
+        'AIAENG.NS', 'AJANTPHARM.NS', 'ALKYLAMINE.NS', 'ALLCARGO.NS', 'ANGELONE.NS',
+        'APARINDS.NS', 'APOLLOTYRE.NS', 'ASAHIINDIA.NS', 'ASTRAMICRO.NS', 'ATUL.NS',
+        'AVANTIFEED.NS', 'BAJAJELEC.NS', 'BALKRISIND.NS', 'BANDHANBNK.NS', 'BBTC.NS',
+        'BDL.NS', 'BERGEPAINT.NS', 'BHARATRAS.NS', 'BIRLACORPN.NS', 'BLUEDART.NS',
+        'BLUESTARCO.NS', 'BRIGADE.NS', 'BSOFT.NS', 'CANFINHOME.NS', 'CARBORUNIV.NS',
+        'CASTROLIND.NS', 'CEATLTD.NS', 'CENTURYPLY.NS', 'CERA.NS', 'CHAMBLFERT.NS',
+        'CGPOWER.NS', 'CLEAN.NS', 'COFORGE.NS', 'COROMANDEL.NS', 'CREDITACC.NS',
+        'CUB.NS', 'CYIENT.NS', 'DEEPAKNTR.NS', 'DELHIVERY.NS', 'DEVYANI.NS',
+        'DHANI.NS', 'DISHTV.NS', 'DIXON.NS', 'EIDPARRY.NS', 'ELGIEQUIP.NS',
+        'EMAMI.NS', 'ENDURANCE.NS', 'ENGINERSIN.NS', 'EPL.NS', 'EQUITASBNK.NS',
+        'ERIS.NS', 'EXIDEIND.NS', 'FACT.NS', 'FINEORG.NS', 'FINPIPE.NS',
+        'FSL.NS', 'GALAXYSURF.NS', 'GARFIBRES.NS', 'GENUSPOWER.NS', 'GHCL.NS',
+        'GILLETTE.NS', 'GLENMARK.NS', 'GMMPFAUDLR.NS', 'GNFC.NS', 'GODFRYPHLP.NS',
+        'GODREJAGRO.NS', 'GODREJIND.NS', 'GRANULES.NS', 'GRAPHITE.NS', 'GRINDWELL.NS',
+        'GSFC.NS', 'GUJGASLTD.NS', 'HAL.NS', 'HAPPSTMNDS.NS', 'HATSUN.NS',
+        'HBLPOWER.NS', 'HEG.NS', 'HEIDELBERG.NS', 'HESTERBIO.NS', 'HFCL.NS',
+        'HINDPETRO.NS', 'HITECH.NS', 'HUDCO.NS', 'IBULHSGFIN.NS', 'INDIAMART.NS',
+        'INDIANB.NS', 'INDIGO.NS', 'INDOCO.NS', 'INTELLECT.NS', 'IOB.NS',
+        'IRB.NS', 'ISEC.NS', 'ITI.NS', 'JBCHEPHARM.NS', 'JCHAC.NS',
+        'JKCEMENT.NS', 'JKPAPER.NS', 'JMFINANCIL.NS', 'JSL.NS', 'JSWENERGY.NS',
+        'JUBLINGREA.NS', 'JUSTDIAL.NS', 'JYOTHYLAB.NS', 'KALPATPOWR.NS', 'KANSAINER.NS',
+        'KARURVYSYA.NS', 'KAJARIACER.NS', 'KEI.NS', 'KFINTECH.NS', 'KNRCON.NS',
+        'KPRMILL.NS', 'KRBL.NS', 'L&TFH.NS', 'LALPATHLAB.NS', 'LAOPALA.NS',
+        'LAURUSLABS.NS', 'LEMONTREE.NS', 'LINDEINDIA.NS', 'LODHA.NS', 'LTTS.NS',
+        'MAHABANK.NS', 'MAHLIFE.NS', 'MAHINDCIE.NS', 'MANINFRA.NS', 'MARKSANS.NS',
+        'MASFIN.NS', 'MAXHEALTH.NS', 'MASTEK.NS', 'MATRIMONY.NS', 'MAZDOCK.NS',
+        'MBLINFRA.NS', 'MCX.NS', 'MEDPLUS.NS', 'METROPOLIS.NS', 'MIDHANI.NS',
+        'MINDACORP.NS', 'MINDTREE.NS', 'MOL.NS', 'MOTILALOFS.NS', 'MRPL.NS',
+        'MSTC.NS', 'MTARTECH.NS', 'NATCOPHARM.NS', 'NBCC.NS', 'NCC.NS',
+        'NELCO.NS', 'NETWORK18.NS', 'NH.NS', 'NHPC.NS', 'NIACL.NS',
+        'NLCINDIA.NS', 'NOCIL.NS', 'NUVOCO.NS', 'NYKAA.NS', 'OIL.NS',
+        'OLECTRA.NS', 'OMAXE.NS', 'ONMOBILE.NS', 'ORIENTELEC.NS', 'PATANJALI.NS',
+        'PAYTM.NS', 'PCBL.NS', 'PDSL.NS', 'PFIZER.NS', 'PHOENIXLTD.NS',
+        'PIRHEALTH.NS', 'PNBHOUSING.NS', 'POLYMED.NS', 'PPLPHARMA.NS', 'PRINCEPIPE.NS',
+        'PTC.NS', 'PVR.NS', 'QUESS.NS', 'RADICO.NS', 'RAILTEL.NS',
+        'RAIN.NS', 'RALLIS.NS', 'RATNAMANI.NS', 'RAYMOND.NS', 'RBA.NS',
+        'REDINGTON.NS', 'RELAXO.NS', 'RENUKA.NS', 'RHIM.NS', 'RITES.NS',
+        'RKFORGE.NS', 'ROSSARI.NS', 'ROUTE.NS', 'RPG.NS', 'RVNL.NS',
+        'SAPPHIRE.NS', 'SAREGAMA.NS', 'SUNFLAG.NS', 'SUNTECK.NS', 'SUPRAJIT.NS',
+        'SUVENPHAR.NS', 'SWANENERGY.NS', 'SYNGENE.NS', 'TANLA.NS', 'TATACHEM.NS',
+        'TATACOFFEE.NS', 'TATAELXSI.NS', 'TATAINVEST.NS', 'TCI.NS', 'TEJASNET.NS',
+        'THERMAX.NS', 'TIMKEN.NS', 'TINPLATE.NS', 'TIINDIA.NS', 'TMB.NS',
+        'TORNTPOWER.NS', 'TRIDENT.NS', 'TRITURBINE.NS', 'TTKPRESTIG.NS', 'TV18BRDCST.NS',
+        'UCOBANK.NS', 'UFLEX.NS', 'UNIONBANK.NS', 'UTIAMC.NS', 'VAIBHAVGBL.NS',
+        'VARROC.NS', 'VGUARD.NS', 'VIPIND.NS', 'VOLTAMP.NS', 'WELCORP.NS',
+        'WELSPUNIND.NS', 'WESTLIFE.NS', 'WHIRLPOOL.NS', 'WOCKPHARMA.NS', 'ZENSARTECH.NS',
+        'ZOMATO.NS',
+    ]
+
 # ==================== DATA FETCHER ====================
 
 class DataFetcher:
@@ -106,6 +199,11 @@ class TradeGenerator:
         idx = len(df) - 1
         current_price = df.iloc[idx]['Close']
         
+        # Price above 200 EMA
+        ema_200 = df.iloc[idx]['EMA_200']
+        if pd.isna(ema_200) or current_price <= ema_200:
+            return None
+        
         # EMA compression
         emas = [df.iloc[idx][f'EMA_{p}'] for p in EMA_PERIODS]
         if any(pd.isna(e) for e in emas):
@@ -126,11 +224,6 @@ class TradeGenerator:
         volume_ratio = volume / volume_ma
         
         if volume_ratio < VOLUME_MULTIPLIER:
-            return None
-        
-        # Price above 200 EMA
-        ema_200 = df.iloc[idx]['EMA_200']
-        if pd.isna(ema_200) or current_price <= ema_200:
             return None
         
         # Calculate levels
@@ -163,7 +256,8 @@ class TradeGenerator:
     
     def generate(self, tickers: List[str]) -> pd.DataFrame:
         logger.info("=" * 80)
-        logger.info("GENERATING TRADE SIGNALS")
+        logger.info("GENERATING TRADE SIGNALS - NIFTY 500")
+        logger.info(f"Universe: {len(tickers)} stocks")
         logger.info(f"Using learned parameters (v{version})")
         logger.info(f"Compression: {COMPRESSION_THRESHOLD}")
         logger.info(f"Volume: {VOLUME_MULTIPLIER}")
@@ -171,11 +265,15 @@ class TradeGenerator:
         logger.info(f"Target: {MEASURED_MOVE}")
         logger.info("=" * 80)
         
+        processed = 0
+        failed = 0
+        
         for ticker in tickers:
             try:
                 df = self.data_fetcher.fetch_data(ticker)
                 
                 if df is None:
+                    failed += 1
                     continue
                 
                 df = self.calculate_indicators(df)
@@ -189,14 +287,22 @@ class TradeGenerator:
                     logger.info(f"   Target: ₹{signal['take_profit']}")
                     logger.info(f"   R:R: {signal['risk_reward']}")
                 
-                time.sleep(0.2)
+                processed += 1
+                
+                # Small delay to avoid rate limiting
+                if processed % 20 == 0:
+                    time.sleep(0.5)
+                else:
+                    time.sleep(0.1)
                 
             except Exception as e:
+                failed += 1
                 logger.debug(f"Error for {ticker}: {e}")
+        
+        logger.info(f"\n✓ Processed: {processed} | Failed: {failed}")
         
         signals_df = pd.DataFrame(self.signals)
         
-        # ALWAYS save, even if empty
         if signals_df.empty:
             signals_df = pd.DataFrame(columns=[
                 'ticker', 'signal_date', 'entry_price', 'stop_loss', 
@@ -212,27 +318,17 @@ class TradeGenerator:
 # ==================== MAIN ====================
 
 def main():
-    # Ensure directories exist
     os.makedirs('logs', exist_ok=True)
     os.makedirs('state', exist_ok=True)
     
-    tickers = [
-        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-        'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'BRITANNIA.NS', 'DABUR.NS',
-        'PIDILITIND.NS', 'HAVELLS.NS', 'ASTRAL.NS', 'DIXON.NS', 'TRENT.NS',
-        'TATAMOTORS.NS', 'M&M.NS', 'BAJAJ-AUTO.NS', 'EICHERMOT.NS', 'TVSMOTOR.NS',
-        'HCLTECH.NS', 'TECHM.NS', 'LTIM.NS', 'MPHASIS.NS', 'COFORGE.NS',
-        'PERSISTENT.NS', 'TATACONSUM.NS', 'GODREJCP.NS', 'MARICO.NS', 'UBL.NS',
-        'VOLTAS.NS', 'CROMPTON.NS', 'KEI.NS', 'POLYCAB.NS', 'SUPREMEIND.NS',
-    ]
+    tickers = get_nifty500_tickers()
+    
+    logger.info(f"Total tickers: {len(tickers)}")
     
     generator = TradeGenerator()
     signals = generator.generate(tickers)
     
-    print(f"\n✅ Generated {len(signals)} trade signals")
+    print(f"\n✅ Generated {len(signals)} trade signals from {len(tickers)} stocks")
     print(f"✅ CSV file created: nifty500_broom_breakout_results.csv")
     
     return signals
