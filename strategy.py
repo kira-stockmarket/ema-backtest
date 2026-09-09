@@ -797,4 +797,163 @@ class BroomBreakoutBacktest:
                     
                     if trades:
                         logger.info(f"  ✓ {metrics['total_trades']} trades, "
-                                  f"Win Rate: {
+                                  f"Win Rate: {metrics['win_rate']:.1f}%, "
+                                  f"Return: {metrics['total_return']:.1f}%")
+                    else:
+                        logger.info(f"  ✓ No trades generated")
+                    
+                    del df, trades
+                    gc.collect()
+                    
+                    time.sleep(self.config.request_delay)
+                    
+                except Exception as e:
+                    logger.error(f"  ✗ Error processing {ticker}: {str(e)}")
+                    self.results.append({
+                        'ticker': ticker,
+                        'total_trades': 0,
+                        'win_rate': 0,
+                        'total_return': 0,
+                        'max_drawdown': 0,
+                        'avg_return_per_trade': 0,
+                        'profit_factor': 0,
+                        'processed': False,
+                        'reason': f'error: {str(e)}'
+                    })
+                    self.stocks_failed += 1
+            
+            if batch_end < len(ticker_list):
+                logger.info(f"\nBatch complete. Waiting {self.config.batch_delay} seconds...")
+                time.sleep(self.config.batch_delay)
+        
+        elapsed_time = time.time() - self.start_time
+        logger.info("\n" + "=" * 80)
+        logger.info("BACKTEST COMPLETED")
+        logger.info(f"Stocks processed: {self.stocks_processed}/{len(ticker_list)}")
+        logger.info(f"Stocks failed: {self.stocks_failed}")
+        logger.info(f"Total trades: {self.total_trades}")
+        logger.info(f"Time elapsed: {elapsed_time/60:.2f} minutes")
+        logger.info("=" * 80)
+        
+        return self.results
+    
+    def export_results(self, filename: str = 'nifty500_broom_breakout_results.csv') -> pd.DataFrame:
+        """Export results to CSV"""
+        results_df = pd.DataFrame(self.results)
+        
+        if results_df.empty:
+            logger.error("No results to export")
+            return pd.DataFrame()
+        
+        output_path = self.config.results_dir / filename
+        results_df.to_csv(output_path, index=False)
+        
+        results_df.to_csv(filename, index=False)
+        
+        logger.info(f"\nResults exported to {output_path}")
+        logger.info(f"Total records: {len(results_df)}")
+        
+        processed_df = results_df[results_df['processed'] == True]
+        if len(processed_df) > 0:
+            logger.info("\n=== SUMMARY STATISTICS ===")
+            logger.info(f"Stocks processed: {len(processed_df)}")
+            logger.info(f"Stocks with trades: {len(processed_df[processed_df['total_trades'] > 0])}")
+            logger.info(f"Total trades: {processed_df['total_trades'].sum()}")
+            logger.info(f"Average win rate: {processed_df['win_rate'].mean():.2f}%")
+            logger.info(f"Average return: {processed_df['total_return'].mean():.2f}%")
+            logger.info(f"Average max drawdown: {processed_df['max_drawdown'].mean():.2f}%")
+            
+            stocks_with_trades = processed_df[processed_df['total_trades'] > 0]
+            if len(stocks_with_trades) > 0:
+                top_performers = stocks_with_trades.nlargest(10, 'total_return')[
+                    ['ticker', 'total_return', 'win_rate', 'total_trades']
+                ]
+                logger.info("\n=== TOP 10 PERFORMERS ===")
+                for _, row in top_performers.iterrows():
+                    logger.info(f"  {row['ticker']}: {row['total_return']:.1f}% return, "
+                              f"{row['win_rate']:.1f}% win rate, {row['total_trades']} trades")
+        
+        return results_df
+
+# ==================== NIFTY 500 UNIVERSE ====================
+
+def get_nifty500_tickers() -> List[str]:
+    """Get list of Nifty 500 tickers"""
+    
+    nifty_500 = [
+        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
+        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
+        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
+        'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS', 'CIPLA.NS',
+        'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
+        'GAIL.NS', 'GRASIM.NS', 'HCLTECH.NS', 'HDFCLIFE.NS',
+        'HEROMOTOCO.NS', 'HINDALCO.NS', 'HINDZINC.NS', 'ICICIPRULI.NS',
+        'INDUSINDBK.NS', 'IOC.NS', 'JSWSTEEL.NS', 'LTIM.NS',
+        'M&M.NS', 'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS',
+        'SBILIFE.NS', 'SHRIRAMFIN.NS', 'SIEMENS.NS', 'TATACONSUM.NS',
+        'TATAMOTORS.NS', 'TATASTEEL.NS', 'TECHM.NS', 'UPL.NS', 'VEDL.NS',
+    ]
+    
+    if config.universe_size < len(nifty_500):
+        logger.info(f"Using subset of {config.universe_size} stocks from Nifty 500")
+        nifty_500 = nifty_500[:config.universe_size]
+    
+    return nifty_500
+
+# ==================== MAIN EXECUTION ====================
+
+def main():
+    """Main execution function"""
+    try:
+        logger.info("=" * 80)
+        logger.info("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
+        logger.info("Nifty 500 Universe Backtesting Engine")
+        logger.info("=" * 80)
+        
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Pandas version: {pd.__version__}")
+        logger.info(f"Numpy version: {np.__version__}")
+        logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"GitHub Actions: {config.is_github_actions}")
+        logger.info(f"Alpha Vantage key configured: {bool(config.alpha_vantage_api_key)}")
+        
+        tickers = get_nifty500_tickers()
+        logger.info(f"\nUniverse size: {len(tickers)} stocks")
+        
+        engine = BroomBreakoutBacktest(config)
+        
+        results = engine.run_universe_backtest(tickers)
+        
+        results_df = engine.export_results()
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("BACKTEST COMPLETED SUCCESSFULLY")
+        logger.info("=" * 80)
+        
+        if config.is_github_actions:
+            print("\n✅ Backtest completed successfully!")
+            print(f"Results saved to: nifty500_broom_breakout_results.csv")
+            
+            if not results_df.empty:
+                processed = results_df[results_df['processed'] == True]
+                if len(processed) > 0:
+                    print(f"\n📊 Summary:")
+                    print(f"  - Stocks processed: {len(processed)}")
+                    print(f"  - Total trades: {processed['total_trades'].sum()}")
+                    print(f"  - Average win rate: {processed['win_rate'].mean():.2f}%")
+                    print(f"  - Average return: {processed['total_return'].mean():.2f}%")
+        
+        return results_df
+        
+    except Exception as e:
+        logger.error(f"Fatal error in main: {str(e)}", exc_info=True)
+        
+        if config.is_github_actions:
+            print(f"\n❌ Backtest failed: {str(e)}")
+        
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
