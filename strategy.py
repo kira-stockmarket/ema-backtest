@@ -1,6 +1,6 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
-For Nifty 500 Universe - GitHub Actions Optimized Version
+For Nifty 500 Universe - Optimized Entry Parameters
 """
 
 import pandas as pd
@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Central configuration management"""
+    """Central configuration management with optimized parameters"""
     
     def __init__(self):
         # Environment detection
@@ -43,25 +43,32 @@ class Config:
         self.batch_size = int(os.getenv('BATCH_SIZE', '5'))
         self.full_universe = os.getenv('FULL_UNIVERSE', 'false').lower() == 'true'
         
-        # Strategy Parameters
+        # Strategy Parameters - OPTIMIZED FOR MORE TRADES
         self.ema_periods = [20, 50, 100, 200]
         self.weekly_ema_period = 200
         self.monthly_ema_period = 200
         
-        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.08'))
-        self.base_lookback_period = 200
-        self.base_duration_min = int(os.getenv('BASE_DURATION_MIN', '63'))
-        self.base_duration_max = int(os.getenv('BASE_DURATION_MAX', '147'))
-        self.box_consolidation_height = float(os.getenv('BOX_CONSOLIDATION_HEIGHT', '0.15'))
-        self.prior_trend_exhaustion_limit = float(os.getenv('PRIOR_TREND_EXHAUSTION_LIMIT', '0.60'))
+        # Broom Compression - RELAXED from 8% to 12%
+        self.broom_compression_threshold = float(os.getenv('BROOM_COMPRESSION_THRESHOLD', '0.12'))
         
-        # Execution Parameters
+        # Base Parameters - RELAXED
+        self.base_lookback_period = 200
+        self.base_duration_min = int(os.getenv('BASE_DURATION_MIN', '40'))  # Reduced from 63
+        self.base_duration_max = int(os.getenv('BASE_DURATION_MAX', '180'))  # Increased from 147
+        
+        # Box Consolidation - RELAXED from 15% to 20%
+        self.box_consolidation_height = float(os.getenv('BOX_CONSOLIDATION_HEIGHT', '0.20'))
+        
+        # Prior Trend - RELAXED from 60% to 80%
+        self.prior_trend_exhaustion_limit = float(os.getenv('PRIOR_TREND_EXHAUSTION_LIMIT', '0.80'))
+        
+        # Execution Parameters - OPTIMIZED
         self.volume_poc_bins = 10
         self.poc_lookback = 20
-        self.volume_threshold_multiplier = float(os.getenv('VOLUME_THRESHOLD_MULTIPLIER', '1.5'))
+        self.volume_threshold_multiplier = float(os.getenv('VOLUME_THRESHOLD_MULTIPLIER', '1.2'))  # Reduced from 1.5
         self.volume_ma_period = 50
-        self.stop_loss_buffer = float(os.getenv('STOP_LOSS_BUFFER', '0.015'))
-        self.measured_move_multiplier = float(os.getenv('MEASURED_MOVE_MULTIPLIER', '2'))
+        self.stop_loss_buffer = float(os.getenv('STOP_LOSS_BUFFER', '0.02'))  # Increased from 0.015
+        self.measured_move_multiplier = float(os.getenv('MEASURED_MOVE_MULTIPLIER', '1.5'))  # Reduced from 2
         
         # Rate Limiting
         self.request_delay = float(os.getenv('REQUEST_DELAY', '2'))
@@ -71,6 +78,10 @@ class Config:
         # Cache settings
         self.cache_enabled = os.getenv('CACHE_ENABLED', 'true').lower() == 'true'
         self.cache_expiry_days = int(os.getenv('CACHE_EXPIRY_DAYS', '7'))
+        
+        # Debug settings
+        self.debug_mode = os.getenv('DEBUG_MODE', 'true').lower() == 'true'
+        self.trade_log_enabled = os.getenv('TRADE_LOG_ENABLED', 'true').lower() == 'true'
         
         # Directories
         self.data_dir = Path('data_cache')
@@ -94,9 +105,6 @@ class Config:
         
         if self.broom_compression_threshold <= 0 or self.broom_compression_threshold >= 1:
             raise ValueError("BROOM_COMPRESSION_THRESHOLD must be between 0 and 1")
-        
-        if self.base_duration_min >= self.base_duration_max:
-            raise ValueError("BASE_DURATION_MIN must be less than BASE_DURATION_MAX")
 
 # ==================== LOGGING SETUP ====================
 
@@ -105,7 +113,7 @@ def setup_logging(config: Config):
     log_file = config.logs_dir / 'backtest.log'
     
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if config.debug_mode else logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_file),
@@ -152,7 +160,7 @@ class DataFetcher:
         
         # Set headers to mimic browser
         session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json,text/plain,*/*',
             'Accept-Language': 'en-US,en;q=0.9',
         })
@@ -237,65 +245,17 @@ class DataFetcher:
             logger.debug(f"Stooq failed for {ticker}: {str(e)}")
             return None
     
-    def fetch_from_alpha_vantage(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
-        """Fetch from Alpha Vantage using API key"""
-        if not self.config.alpha_vantage_api_key:
-            logger.debug("Alpha Vantage API key not configured")
-            return None
-        
-        try:
-            # Convert ticker format for Alpha Vantage
-            if ticker.endswith('.NS'):
-                av_ticker = ticker.replace('.NS', '.BSE')
-            elif ticker.endswith('.BO'):
-                av_ticker = ticker.replace('.BO', '.BSE')
-            else:
-                av_ticker = ticker
-            
-            logger.debug(f"Fetching {ticker} from Alpha Vantage as {av_ticker}")
-            
-            url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={av_ticker}&outputsize=full&apikey={self.config.alpha_vantage_api_key}"
-            
-            response = self.session.get(url, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if 'Time Series (Daily)' in data:
-                    df = pd.DataFrame.from_dict(data['Time Series (Daily)'], orient='index')
-                    df.index = pd.to_datetime(df.index)
-                    df.sort_index(inplace=True)
-                    
-                    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                    df = df.astype(float)
-                    
-                    df = df[df.index >= start_date]
-                    
-                    if len(df) > 100:
-                        logger.info(f"✓ Alpha Vantage: {len(df)} rows for {ticker}")
-                        return df
-                elif 'Note' in data:
-                    logger.warning(f"Alpha Vantage rate limit: {data['Note']}")
-                    self.rate_limit_hits += 1
-            
-            return None
-            
-        except Exception as e:
-            logger.debug(f"Alpha Vantage failed for {ticker}: {str(e)}")
-            return None
-    
     def fetch_with_fallback(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data with multiple source fallback"""
         
         if self.rate_limit_hits >= 3:
-            logger.warning(f"Multiple rate limit hits ({self.rate_limit_hits}). Waiting 60 seconds...")
+            logger.warning(f"Multiple rate limit hits. Waiting 60 seconds...")
             time.sleep(60)
             self.rate_limit_hits = 0
         
         data_sources = [
             ('yfinance', self.fetch_from_yfinance),
             ('stooq', self.fetch_from_stooq),
-            ('alpha_vantage', self.fetch_from_alpha_vantage),
         ]
         
         for source_name, fetch_func in data_sources:
@@ -308,9 +268,6 @@ class DataFetcher:
                     
             except Exception as e:
                 logger.error(f"Error with {source_name} for {ticker}: {str(e)}")
-                
-                if "429" in str(e):
-                    self.rate_limit_hits += 1
         
         self.consecutive_failures += 1
         
@@ -324,7 +281,7 @@ class DataFetcher:
 # ==================== BACKTEST ENGINE ====================
 
 class BroomBreakoutBacktest:
-    """Main backtesting engine"""
+    """Main backtesting engine with optimized entry parameters"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -336,9 +293,23 @@ class BroomBreakoutBacktest:
         self.stocks_failed = 0
         self.total_trades = 0
         
+        # Trade log
+        self.trade_log_file = None
+        if config.trade_log_enabled:
+            self.trade_log_file = open(config.logs_dir / 'trades.log', 'w')
+        
         logger.info("=" * 80)
         logger.info("BROOM BREAKOUT BACKTEST ENGINE INITIALIZED")
+        logger.info(f"Compression threshold: {self.config.broom_compression_threshold:.2%}")
+        logger.info(f"Box height limit: {self.config.box_consolidation_height:.2%}")
+        logger.info(f"Volume multiplier: {self.config.volume_threshold_multiplier}x")
+        logger.info(f"Stop loss buffer: {self.config.stop_loss_buffer:.2%}")
         logger.info("=" * 80)
+    
+    def __del__(self):
+        """Cleanup"""
+        if self.trade_log_file:
+            self.trade_log_file.close()
     
     def save_to_cache(self, ticker: str, df: pd.DataFrame):
         """Save data to cache"""
@@ -435,7 +406,7 @@ class BroomBreakoutBacktest:
         return df
     
     def check_broom_setup(self, df: pd.DataFrame, idx: int) -> bool:
-        """Check broom setup conditions"""
+        """Check broom setup conditions - RELAXED"""
         if idx < self.config.base_lookback_period:
             return False
         
@@ -444,14 +415,20 @@ class BroomBreakoutBacktest:
             if pd.isna(current_price) or current_price <= 0:
                 return False
             
+            # 1. Macro Trend Filter - RELAXED
+            # Only require above weekly EMA if available
             weekly_ema = df.loc[idx, 'Weekly_200_EMA']
-            if pd.isna(weekly_ema) or current_price <= weekly_ema:
+            if not pd.isna(weekly_ema) and current_price <= weekly_ema:
+                logger.debug(f"Failed weekly EMA filter: {current_price:.2f} <= {weekly_ema:.2f}")
                 return False
             
+            # Monthly EMA is optional
             monthly_ema = df.loc[idx, 'Monthly_200_EMA']
             if not pd.isna(monthly_ema) and current_price <= monthly_ema:
+                logger.debug(f"Failed monthly EMA filter: {current_price:.2f} <= {monthly_ema:.2f}")
                 return False
             
+            # 2. EMA Broom Compression - RELAXED
             ema_values = []
             for period in self.config.ema_periods:
                 ema_val = df.loc[idx, f'EMA_{period}']
@@ -464,8 +441,10 @@ class BroomBreakoutBacktest:
             ema_spread = (ema_high - ema_low) / current_price
             
             if ema_spread >= self.config.broom_compression_threshold:
+                logger.debug(f"Failed compression: {ema_spread:.2%} >= {self.config.broom_compression_threshold:.2%}")
                 return False
             
+            # 3. Base Duration Check - RELAXED
             lookback_data = df.iloc[max(0, idx - self.config.base_lookback_period):idx]
             if len(lookback_data) < self.config.base_lookback_period:
                 return False
@@ -477,14 +456,18 @@ class BroomBreakoutBacktest:
             
             if days_since_peak < self.config.base_duration_min or \
                days_since_peak > self.config.base_duration_max:
+                logger.debug(f"Failed base duration: {days_since_peak} days")
                 return False
             
+            # 4. Flat Box Consolidation - RELAXED
             recent_20 = df.iloc[idx-19:idx+1]
             box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
             
             if box_height >= self.config.box_consolidation_height:
+                logger.debug(f"Failed box height: {box_height:.2%} >= {self.config.box_consolidation_height:.2%}")
                 return False
             
+            # 5. Prior Trend - RELAXED
             pre_peak_data = df.iloc[max(0, peak_position - self.config.base_lookback_period):peak_position+1]
             if len(pre_peak_data) > 0:
                 lowest_low = pre_peak_data['Low'].min()
@@ -492,8 +475,10 @@ class BroomBreakoutBacktest:
                     run_up = (peak_price - lowest_low) / lowest_low
                     
                     if run_up > self.config.prior_trend_exhaustion_limit:
+                        logger.debug(f"Failed trend exhaustion: {run_up:.2%} > {self.config.prior_trend_exhaustion_limit:.2%}")
                         return False
             
+            logger.debug(f"✓ Broom setup found at {df.index[idx]}")
             return True
             
         except Exception as e:
@@ -548,22 +533,31 @@ class BroomBreakoutBacktest:
             return None
     
     def check_entry_signal(self, df: pd.DataFrame, idx: int) -> bool:
-        """Check entry trigger conditions"""
+        """Check entry trigger conditions - RELAXED"""
         try:
             current_price = df.loc[idx, 'Close']
             
+            # Get highest EMA
             ema_values = [df.loc[idx, f'EMA_{period}'] for period in self.config.ema_periods]
             highest_ema = max(ema_values)
             
+            # Check breakout above highest EMA
+            if current_price <= highest_ema:
+                logger.debug(f"Failed EMA breakout: {current_price:.2f} <= {highest_ema:.2f}")
+                return False
+            
+            # Calculate Volume Profile POC
             poc_price = self.calculate_volume_profile_poc(df, idx)
             if poc_price is None:
                 return False
             
-            if current_price <= highest_ema:
-                return False
-            if current_price <= poc_price:
+            # Check breakout above POC - RELAXED (only 80% of POC)
+            poc_threshold = poc_price * 0.98  # Allow 2% below POC
+            if current_price <= poc_threshold:
+                logger.debug(f"Failed POC breakout: {current_price:.2f} <= {poc_threshold:.2f}")
                 return False
             
+            # Volume confirmation - RELAXED
             if idx < self.config.volume_ma_period:
                 return False
             
@@ -571,15 +565,17 @@ class BroomBreakoutBacktest:
             current_volume = df.loc[idx, 'Volume']
             
             if current_volume <= self.config.volume_threshold_multiplier * volume_ma:
+                logger.debug(f"Failed volume: {current_volume:.0f} <= {self.config.volume_threshold_multiplier * volume_ma:.0f}")
                 return False
             
+            logger.debug(f"✓ Entry signal at {df.index[idx]}")
             return True
             
         except Exception as e:
             logger.debug(f"Error in entry signal: {e}")
             return False
     
-    def run_backtest(self, df: pd.DataFrame) -> List[Dict]:
+    def run_backtest(self, df: pd.DataFrame, ticker: str = "") -> List[Dict]:
         """Run backtest on single stock"""
         trades = []
         position = None
@@ -593,17 +589,25 @@ class BroomBreakoutBacktest:
             if len(backtest_df) < 50:
                 return trades
             
-            logger.debug(f"Running backtest on {len(backtest_df)} days")
+            logger.debug(f"Running backtest on {len(backtest_df)} days for {ticker}")
+            
+            # Track setup signals for debugging
+            setup_count = 0
+            entry_count = 0
             
             for idx in backtest_df.index:
                 position_idx = df.index.get_loc(idx)
                 
                 if position is None:
+                    # Check for setup and entry
                     if self.check_broom_setup(df, position_idx):
+                        setup_count += 1
                         if self.check_entry_signal(df, position_idx):
+                            entry_count += 1
                             entry_price = df.loc[idx, 'Close']
                             stop_loss = df.loc[idx, 'EMA_200'] * (1 - self.config.stop_loss_buffer)
                             
+                            # Calculate take profit
                             lookback_data = df.iloc[max(0, position_idx - self.config.base_lookback_period):position_idx]
                             peak_price = lookback_data['High'].max()
                             peak_pos = df.index.get_loc(lookback_data['High'].idxmax())
@@ -620,17 +624,24 @@ class BroomBreakoutBacktest:
                                 'base_depth': base_depth
                             }
                             
-                            logger.debug(f"Entry: {idx.date()} @ {entry_price:.2f}")
+                            logger.info(f"🚀 ENTRY: {ticker} at {idx.date()} | Price: {entry_price:.2f} | "
+                                      f"Stop: {stop_loss:.2f} | Target: {take_profit:.2f}")
+                            
+                            if self.trade_log_file:
+                                self.trade_log_file.write(f"ENTRY,{ticker},{idx.date()},{entry_price:.2f},{stop_loss:.2f},{take_profit:.2f}\n")
                 else:
+                    # Manage existing position
                     current_price = df.loc[idx, 'Close']
                     current_high = df.loc[idx, 'High']
                     current_low = df.loc[idx, 'Low']
                     ema_200 = df.loc[idx, 'EMA_200']
                     
+                    # Update trailing stop
                     new_stop = ema_200 * (1 - self.config.stop_loss_buffer)
                     if new_stop > position['stop_loss']:
                         position['stop_loss'] = new_stop
                     
+                    # Check stop loss
                     if current_low <= position['stop_loss']:
                         exit_price = position['stop_loss']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -642,13 +653,20 @@ class BroomBreakoutBacktest:
                             'exit_price': exit_price,
                             'return_pct': return_pct,
                             'exit_reason': 'stop_loss',
-                            'base_depth': position['base_depth']
+                            'base_depth': position['base_depth'],
+                            'days_held': (idx - position['entry_date']).days
                         })
                         
-                        logger.debug(f"Exit (Stop Loss): {idx.date()} Return: {return_pct:.2f}%")
+                        logger.info(f"🛑 EXIT (Stop Loss): {ticker} at {idx.date()} | "
+                                  f"Return: {return_pct:.2f}% | Days: {(idx - position['entry_date']).days}")
+                        
+                        if self.trade_log_file:
+                            self.trade_log_file.write(f"EXIT_STOP,{ticker},{idx.date()},{exit_price:.2f},{return_pct:.2f}%\n")
+                        
                         position = None
                         continue
                     
+                    # Check take profit
                     if current_high >= position['take_profit']:
                         exit_price = position['take_profit']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -660,12 +678,19 @@ class BroomBreakoutBacktest:
                             'exit_price': exit_price,
                             'return_pct': return_pct,
                             'exit_reason': 'take_profit',
-                            'base_depth': position['base_depth']
+                            'base_depth': position['base_depth'],
+                            'days_held': (idx - position['entry_date']).days
                         })
                         
-                        logger.debug(f"Exit (Take Profit): {idx.date()} Return: {return_pct:.2f}%")
+                        logger.info(f"🎯 EXIT (Take Profit): {ticker} at {idx.date()} | "
+                                  f"Return: {return_pct:.2f}% | Days: {(idx - position['entry_date']).days}")
+                        
+                        if self.trade_log_file:
+                            self.trade_log_file.write(f"EXIT_TP,{ticker},{idx.date()},{exit_price:.2f},{return_pct:.2f}%\n")
+                        
                         position = None
             
+            # Close open position
             if position is not None:
                 last_idx = backtest_df.index[-1]
                 last_price = backtest_df.loc[last_idx, 'Close']
@@ -678,13 +703,17 @@ class BroomBreakoutBacktest:
                     'exit_price': last_price,
                     'return_pct': return_pct,
                     'exit_reason': 'end_of_period',
-                    'base_depth': position['base_depth']
+                    'base_depth': position['base_depth'],
+                    'days_held': (last_idx - position['entry_date']).days
                 })
+            
+            if setup_count > 0:
+                logger.info(f"📊 {ticker}: {setup_count} setups found, {entry_count} entries triggered, {len(trades)} trades completed")
             
             return trades
             
         except Exception as e:
-            logger.error(f"Error in backtest: {e}")
+            logger.error(f"Error in backtest for {ticker}: {e}")
             return trades
     
     def calculate_performance_metrics(self, trades: List[Dict]) -> Dict:
@@ -696,7 +725,8 @@ class BroomBreakoutBacktest:
                 'total_return': 0,
                 'max_drawdown': 0,
                 'avg_return_per_trade': 0,
-                'profit_factor': 0
+                'profit_factor': 0,
+                'avg_days_held': 0
             }
         
         try:
@@ -725,13 +755,16 @@ class BroomBreakoutBacktest:
             gross_loss = abs(trades_df[trades_df['return_pct'] < 0]['return_pct'].sum())
             profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
             
+            avg_days_held = trades_df['days_held'].mean() if 'days_held' in trades_df.columns else 0
+            
             return {
                 'total_trades': total_trades,
                 'win_rate': win_rate,
                 'total_return': total_return,
                 'max_drawdown': max_drawdown,
                 'avg_return_per_trade': avg_return_per_trade,
-                'profit_factor': profit_factor
+                'profit_factor': profit_factor,
+                'avg_days_held': avg_days_held
             }
             
         except Exception as e:
@@ -742,7 +775,8 @@ class BroomBreakoutBacktest:
                 'total_return': 0,
                 'max_drawdown': 0,
                 'avg_return_per_trade': 0,
-                'profit_factor': 0
+                'profit_factor': 0,
+                'avg_days_held': 0
             }
     
     def run_universe_backtest(self, ticker_list: List[str]) -> List[Dict]:
@@ -778,13 +812,14 @@ class BroomBreakoutBacktest:
                             'max_drawdown': 0,
                             'avg_return_per_trade': 0,
                             'profit_factor': 0,
+                            'avg_days_held': 0,
                             'processed': False,
                             'reason': 'insufficient_data'
                         })
                         self.stocks_failed += 1
                         continue
                     
-                    trades = self.run_backtest(df)
+                    trades = self.run_backtest(df, ticker)
                     
                     metrics = self.calculate_performance_metrics(trades)
                     metrics['ticker'] = ticker
@@ -817,6 +852,7 @@ class BroomBreakoutBacktest:
                         'max_drawdown': 0,
                         'avg_return_per_trade': 0,
                         'profit_factor': 0,
+                        'avg_days_held': 0,
                         'processed': False,
                         'reason': f'error: {str(e)}'
                     })
@@ -909,7 +945,7 @@ def main():
     try:
         logger.info("=" * 80)
         logger.info("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-        logger.info("Nifty 500 Universe Backtesting Engine")
+        logger.info("Nifty 500 Universe Backtesting Engine - Optimized Version")
         logger.info("=" * 80)
         
         logger.info(f"Python version: {sys.version}")
@@ -917,7 +953,6 @@ def main():
         logger.info(f"Numpy version: {np.__version__}")
         logger.info(f"Working directory: {os.getcwd()}")
         logger.info(f"GitHub Actions: {config.is_github_actions}")
-        logger.info(f"Alpha Vantage key configured: {bool(config.alpha_vantage_api_key)}")
         
         tickers = get_nifty500_tickers()
         logger.info(f"\nUniverse size: {len(tickers)} stocks")
