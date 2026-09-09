@@ -19,5 +19,26 @@
       "stop_loss_buffer": 0.015,
       "measured_move_multiplier": 2.0
     }
+  },
+  {
+    "timestamp": "2026-09-09T22:26:54.740282",
+    "version": 1,
+    "total_trades": 3701,
+    "metrics": {
+      "new_trades": 3201,
+      "total_trades": 3701,
+      "params": {
+        "broom_compression_threshold": 0.077396468960998,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.0165,
+        "measured_move_multiplier": 1.8
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.077396468960998,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.0165,
+      "measured_move_multiplier": 1.8
+    }
   }
 ]
