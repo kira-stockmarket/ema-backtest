@@ -1,7 +1,6 @@
 """
 Institutional Moving Average "Broom" Breakout Strategy Backtesting Engine
-For Nifty 500 Universe
-Author: Quantitative Developer
+For Nifty 500 Universe - Enhanced Version with Robust Error Handling
 """
 
 import pandas as pd
@@ -11,10 +10,136 @@ from datetime import datetime, timedelta
 import warnings
 import gc
 import time
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import logging
+from typing import Optional, Dict, List
+import json
+import os
+
 warnings.filterwarnings('ignore')
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('backtest.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+class RobustDataFetcher:
+    """Enhanced data fetching with retry logic and error handling"""
+    
+    def __init__(self, max_retries=3, retry_delay=2):
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.session = self._create_session()
+        
+    def _create_session(self):
+        """Create a session with retry strategy"""
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=5,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
+    
+    def fetch_with_retry(self, ticker: str, start_date: str, end_date: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """Fetch data with exponential backoff retry"""
+        if end_date is None:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Add delay between attempts
+                if attempt > 0:
+                    wait_time = self.retry_delay * (2 ** (attempt - 1))  # Exponential backoff
+                    logger.info(f"Retry {attempt} for {ticker} after {wait_time} seconds")
+                    time.sleep(wait_time)
+                
+                # Use yfinance with custom session
+                stock = yf.Ticker(ticker, session=self.session)
+                df = stock.history(
+                    start=start_date,
+                    end=end_date,
+                    auto_adjust=True,
+                    timeout=30
+                )
+                
+                if df is None or df.empty:
+                    logger.warning(f"No data returned for {ticker} on attempt {attempt + 1}")
+                    continue
+                
+                # Validate data
+                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                if not all(col in df.columns for col in required_columns):
+                    logger.warning(f"Missing columns for {ticker}")
+                    continue
+                
+                # Clean data
+                df = df[required_columns].copy()
+                df = df.dropna()
+                
+                if len(df) < 100:  # Minimum data requirement
+                    logger.warning(f"Insufficient data for {ticker}: {len(df)} rows")
+                    return None
+                
+                logger.info(f"Successfully fetched {len(df)} rows for {ticker}")
+                return df
+                
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "rate limit" in error_str.lower():
+                    logger.warning(f"Rate limited for {ticker} (attempt {attempt + 1})")
+                elif "404" in error_str:
+                    logger.error(f"Ticker {ticker} not found")
+                    return None
+                else:
+                    logger.error(f"Error fetching {ticker} (attempt {attempt + 1}): {error_str}")
+                
+                if attempt == self.max_retries - 1:
+                    return None
+        
+        return None
+    
+    def fetch_with_alternative_sources(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
+        """Try alternative data sources if Yahoo Finance fails"""
+        # Try different Yahoo Finance ticker formats
+        alternative_formats = []
+        
+        if ticker.endswith('.NS'):
+            # Try without suffix
+            alternative_formats.append(ticker.replace('.NS', ''))
+            # Try with .BO suffix
+            alternative_formats.append(ticker.replace('.NS', '.BO'))
+        elif ticker.endswith('.BO'):
+            alternative_formats.append(ticker.replace('.BO', '.NS'))
+            alternative_formats.append(ticker.replace('.BO', ''))
+        else:
+            alternative_formats.append(f"{ticker}.NS")
+            alternative_formats.append(f"{ticker}.BO")
+        
+        for alt_ticker in alternative_formats:
+            logger.info(f"Trying alternative ticker format: {alt_ticker}")
+            df = self.fetch_with_retry(alt_ticker, start_date)
+            if df is not None and not df.empty:
+                logger.info(f"Successfully fetched data using {alt_ticker}")
+                return df
+        
+        return None
+
+
 class BroomBreakoutBacktest:
-    def __init__(self):
+    def __init__(self, data_dir='data_cache'):
         # Strategy Parameters
         self.ema_periods = [20, 50, 100, 200]
         self.weekly_ema_period = 200
@@ -40,39 +165,62 @@ class BroomBreakoutBacktest:
         self.backtest_start = '2018-01-01'
         self.data_start = '2000-01-01'
         
+        # Data cache
+        self.data_dir = data_dir
+        os.makedirs(data_dir, exist_ok=True)
+        
         # Results Storage
         self.results = []
         
-    def download_data(self, ticker):
-        """Download historical data for a single stock"""
+        # Initialize data fetcher
+        self.data_fetcher = RobustDataFetcher()
+    
+    def save_to_cache(self, ticker: str, df: pd.DataFrame):
+        """Save data to local cache"""
+        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.parquet")
         try:
-            stock = yf.Ticker(ticker)
-            df = stock.history(start=self.data_start, end=datetime.now())
-            
-            if df.empty:
-                print(f"No data found for {ticker}")
-                return None
-                
-            # Ensure required columns exist
-            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-            if not all(col in df.columns for col in required_cols):
-                print(f"Missing columns for {ticker}")
-                return None
-                
-            df = df[required_cols].copy()
-            
-            # Remove any rows with NaN values
-            df = df.dropna()
-            
-            if len(df) < 200:  # Need minimum data for calculations
-                print(f"Insufficient data for {ticker}: {len(df)} rows")
-                return None
-                
-            return df
-            
+            df.to_parquet(cache_file)
+            logger.info(f"Cached data for {ticker}")
         except Exception as e:
-            print(f"Error downloading {ticker}: {str(e)}")
-            return None
+            logger.warning(f"Failed to cache data for {ticker}: {e}")
+    
+    def load_from_cache(self, ticker: str) -> Optional[pd.DataFrame]:
+        """Load data from local cache"""
+        cache_file = os.path.join(self.data_dir, f"{ticker.replace('.', '_')}.parquet")
+        if os.path.exists(cache_file):
+            try:
+                df = pd.read_parquet(cache_file)
+                # Check if cache is recent (less than 7 days old)
+                file_age = time.time() - os.path.getmtime(cache_file)
+                if file_age < 7 * 24 * 3600:  # 7 days
+                    logger.info(f"Loaded cached data for {ticker}")
+                    return df
+                else:
+                    logger.info(f"Cache expired for {ticker}")
+            except Exception as e:
+                logger.warning(f"Failed to load cache for {ticker}: {e}")
+        return None
+    
+    def download_data(self, ticker: str) -> Optional[pd.DataFrame]:
+        """Download historical data with caching"""
+        # Try loading from cache first
+        df = self.load_from_cache(ticker)
+        if df is not None:
+            return df
+        
+        # Fetch from Yahoo Finance
+        df = self.data_fetcher.fetch_with_retry(ticker, self.data_start)
+        
+        # Try alternative sources if primary fails
+        if df is None:
+            logger.warning(f"Primary fetch failed for {ticker}, trying alternatives")
+            df = self.data_fetcher.fetch_with_alternative_sources(ticker, self.data_start)
+        
+        # Cache the data if successful
+        if df is not None and not df.empty:
+            self.save_to_cache(ticker, df)
+        
+        return df
     
     def calculate_emas(self, df):
         """Calculate EMAs at different timeframes"""
@@ -328,6 +476,9 @@ class BroomBreakoutBacktest:
                             'base_depth': base_depth,
                             'initial_stop': stop_loss
                         }
+                        
+                        logger.info(f"Entry signal for {idx.date()}: Price={entry_price:.2f}, "
+                                  f"Stop={stop_loss:.2f}, Target={take_profit:.2f}")
             else:
                 # Manage existing position
                 current_price = df.loc[idx, 'Close']
@@ -352,6 +503,7 @@ class BroomBreakoutBacktest:
                         'exit_reason': 'stop_loss',
                         'base_depth': position['base_depth']
                     })
+                    logger.info(f"Exit (Stop Loss) for {idx.date()}: Return={trades[-1]['return_pct']:.2f}%")
                     position = None
                     continue
                 
@@ -367,6 +519,7 @@ class BroomBreakoutBacktest:
                         'exit_reason': 'take_profit',
                         'base_depth': position['base_depth']
                     })
+                    logger.info(f"Exit (Take Profit) for {idx.date()}: Return={trades[-1]['return_pct']:.2f}%")
                     position = None
         
         # Close any open position at the end
@@ -440,23 +593,77 @@ class BroomBreakoutBacktest:
             'profit_factor': profit_factor
         }
     
-    def run_universe_backtest(self, ticker_list):
-        """Run backtest for entire universe"""
+    def run_universe_backtest(self, ticker_list, batch_size=10):
+        """Run backtest for entire universe with batching"""
         print(f"Starting backtest for {len(ticker_list)} stocks...")
         print(f"Backtest period: {self.backtest_start} to present")
         print("-" * 80)
         
         start_time = time.time()
         processed_count = 0
+        failed_count = 0
         
-        for i, ticker in enumerate(ticker_list):
-            try:
-                print(f"[{i+1}/{len(ticker_list)}] Processing {ticker}...")
-                
-                # Download data
-                df = self.download_data(ticker)
-                if df is None or len(df) < 300:
-                    print(f"  Skipping {ticker}: insufficient data")
+        # Process in batches
+        for batch_start in range(0, len(ticker_list), batch_size):
+            batch_end = min(batch_start + batch_size, len(ticker_list))
+            batch = ticker_list[batch_start:batch_end]
+            
+            logger.info(f"Processing batch {batch_start//batch_size + 1}: stocks {batch_start+1}-{batch_end}")
+            
+            for i, ticker in enumerate(batch):
+                global_idx = batch_start + i
+                try:
+                    print(f"[{global_idx+1}/{len(ticker_list)}] Processing {ticker}...")
+                    
+                    # Download data
+                    df = self.download_data(ticker)
+                    if df is None or len(df) < 300:
+                        print(f"  Skipping {ticker}: insufficient data")
+                        self.results.append({
+                            'ticker': ticker,
+                            'total_trades': 0,
+                            'win_rate': 0,
+                            'total_return': 0,
+                            'max_drawdown': 0,
+                            'avg_return_per_trade': 0,
+                            'profit_factor': 0,
+                            'processed': False,
+                            'reason': 'insufficient_data'
+                        })
+                        failed_count += 1
+                        continue
+                    
+                    # Run backtest
+                    trades = self.run_backtest(df)
+                    
+                    # Calculate metrics
+                    metrics = self.calculate_performance_metrics(df, trades)
+                    metrics['ticker'] = ticker
+                    metrics['processed'] = True
+                    metrics['reason'] = 'success'
+                    
+                    self.results.append(metrics)
+                    processed_count += 1
+                    
+                    # Print interim results
+                    if trades:
+                        print(f"  Trades: {metrics['total_trades']}, "
+                              f"Win Rate: {metrics['win_rate']:.1f}%, "
+                              f"Return: {metrics['total_return']:.1f}%")
+                    else:
+                        print(f"  No trades generated")
+                    
+                    # Clear memory
+                    del df
+                    del trades
+                    gc.collect()
+                    
+                    # Add delay between stocks
+                    time.sleep(1)  # 1 second delay
+                    
+                except Exception as e:
+                    logger.error(f"Error processing {ticker}: {str(e)}", exc_info=True)
+                    print(f"  Error processing {ticker}: {str(e)}")
                     self.results.append({
                         'ticker': ticker,
                         'total_trades': 0,
@@ -466,55 +673,19 @@ class BroomBreakoutBacktest:
                         'avg_return_per_trade': 0,
                         'profit_factor': 0,
                         'processed': False,
-                        'reason': 'insufficient_data'
+                        'reason': f'error: {str(e)}'
                     })
-                    continue
-                
-                # Run backtest
-                trades = self.run_backtest(df)
-                
-                # Calculate metrics
-                metrics = self.calculate_performance_metrics(df, trades)
-                metrics['ticker'] = ticker
-                metrics['processed'] = True
-                metrics['reason'] = 'success'
-                
-                self.results.append(metrics)
-                processed_count += 1
-                
-                # Print interim results
-                if trades:
-                    print(f"  Trades: {metrics['total_trades']}, "
-                          f"Win Rate: {metrics['win_rate']:.1f}%, "
-                          f"Return: {metrics['total_return']:.1f}%")
-                else:
-                    print(f"  No trades generated")
-                
-                # Clear memory
-                del df
-                del trades
-                gc.collect()
-                
-                # Add small delay to avoid rate limiting
-                time.sleep(0.5)
-                
-            except Exception as e:
-                print(f"  Error processing {ticker}: {str(e)}")
-                self.results.append({
-                    'ticker': ticker,
-                    'total_trades': 0,
-                    'win_rate': 0,
-                    'total_return': 0,
-                    'max_drawdown': 0,
-                    'avg_return_per_trade': 0,
-                    'profit_factor': 0,
-                    'processed': False,
-                    'reason': f'error: {str(e)}'
-                })
+                    failed_count += 1
+            
+            # Add longer delay between batches
+            if batch_end < len(ticker_list):
+                logger.info(f"Batch complete. Waiting 5 seconds before next batch...")
+                time.sleep(5)
         
         elapsed_time = time.time() - start_time
         print("\n" + "=" * 80)
-        print(f"Backtest completed: {processed_count}/{len(ticker_list)} stocks processed")
+        print(f"Backtest completed: {processed_count}/{len(ticker_list)} stocks processed successfully")
+        print(f"Failed: {failed_count} stocks")
         print(f"Time elapsed: {elapsed_time/60:.2f} minutes")
         
         return self.results
@@ -522,6 +693,10 @@ class BroomBreakoutBacktest:
     def export_results(self, filename='nifty500_broom_breakout_results.csv'):
         """Export results to CSV"""
         results_df = pd.DataFrame(self.results)
+        
+        if results_df.empty:
+            logger.error("No results to export")
+            return None
         
         # Reorder columns
         column_order = [
@@ -541,6 +716,7 @@ class BroomBreakoutBacktest:
         processed_df = results_df[results_df['processed'] == True]
         if len(processed_df) > 0:
             print("\n=== SUMMARY STATISTICS ===")
+            print(f"Stocks successfully processed: {len(processed_df)}")
             print(f"Stocks with trades: {len(processed_df[processed_df['total_trades'] > 0])}")
             print(f"Total trades: {processed_df['total_trades'].sum()}")
             print(f"Average win rate: {processed_df['win_rate'].mean():.2f}%")
@@ -548,9 +724,13 @@ class BroomBreakoutBacktest:
             print(f"Average max drawdown: {processed_df['max_drawdown'].mean():.2f}%")
             
             # Top 10 performers
-            top_performers = processed_df.nlargest(10, 'total_return')[['ticker', 'total_return', 'win_rate', 'total_trades']]
-            print("\n=== TOP 10 PERFORMERS ===")
-            print(top_performers.to_string(index=False))
+            stocks_with_trades = processed_df[processed_df['total_trades'] > 0]
+            if len(stocks_with_trades) > 0:
+                top_performers = stocks_with_trades.nlargest(10, 'total_return')[
+                    ['ticker', 'total_return', 'win_rate', 'total_trades']
+                ]
+                print("\n=== TOP 10 PERFORMERS ===")
+                print(top_performers.to_string(index=False))
         
         return results_df
 
@@ -558,9 +738,7 @@ class BroomBreakoutBacktest:
 def get_nifty500_tickers():
     """Get list of Nifty 500 tickers"""
     # This is a sample list - in production, you would fetch this from NSE
-    # For demonstration, I'll include a subset and structure
     
-    # Note: Yahoo Finance uses .NS suffix for NSE stocks
     nifty_500_sample = [
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
@@ -577,7 +755,7 @@ def main():
     """Main execution function"""
     print("=" * 80)
     print("INSTITUTIONAL MOVING AVERAGE 'BROOM' BREAKOUT STRATEGY")
-    print("Nifty 500 Universe Backtesting Engine")
+    print("Nifty 500 Universe Backtesting Engine - Enhanced Version")
     print("=" * 80)
     
     # Get universe
@@ -587,8 +765,8 @@ def main():
     # Initialize backtest engine
     engine = BroomBreakoutBacktest()
     
-    # Run backtest
-    results = engine.run_universe_backtest(tickers)
+    # Run backtest with smaller batch size to avoid rate limiting
+    results = engine.run_universe_backtest(tickers, batch_size=5)
     
     # Export results
     results_df = engine.export_results()
