@@ -1,6 +1,7 @@
 """
-Broom Breakout Strategy with Proper Trailing Stop-Loss
-Let winners run with ATR-based trailing stops
+SNIPER Broom Breakout Strategy
+Extremely Selective - Quality Over Quantity
+Multiple Confirmations Required
 """
 
 import pandas as pd
@@ -22,7 +23,7 @@ warnings.filterwarnings('ignore')
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Configuration with trailing stop focus"""
+    """Sniper configuration - extremely selective"""
     
     def __init__(self):
         self.is_github_actions = os.getenv('GITHUB_ACTIONS', 'false').lower() == 'true'
@@ -35,36 +36,54 @@ class Config:
         self.universe_size = int(os.getenv('UNIVERSE_SIZE', '50'))
         self.batch_size = int(os.getenv('BATCH_SIZE', '10'))
         
-        # Strategy Parameters
-        self.ema_periods = [20, 50, 100, 200]
-        self.compression_threshold = 0.10
-        self.base_lookback = 120
-        self.base_duration_min = 20
-        self.base_duration_max = 120
-        self.consolidation_height = 0.15
+        # ===== SNIPER FILTERS - VERY STRICT =====
         
-        # Entry Conditions
-        self.volume_surge = 1.5
-        self.volume_ma_period = 20
+        # EMA Compression (very tight)
+        self.compression_threshold = 0.05  # 5% only - very tight broom
         
-        # ===== TRAILING STOP PARAMETERS =====
-        self.initial_stop_atr_multiplier = 2.0  # Initial stop: 2x ATR
-        self.trailing_stop_atr_multiplier = 3.0  # Trailing stop: 3x ATR
-        self.atr_period = 14
+        # Base Pattern (longer, cleaner)
+        self.base_lookback = 180  # 9 months lookback
+        self.base_duration_min = 40  # 2 months minimum
+        self.base_duration_max = 100  # 5 months maximum
         
-        # Additional trailing mechanisms
-        self.use_percentage_trailing = True
-        self.trailing_percentage = 0.10  # 10% trailing from peak
+        # Consolidation (very tight)
+        self.consolidation_period = 30  # 30 days consolidation
+        self.consolidation_height = 0.10  # 10% maximum box height
         
-        self.use_ema_trailing = True
-        self.trailing_ema_period = 20  # Trail below 20 EMA
+        # ===== MULTIPLE CONFIRMATIONS REQUIRED =====
         
-        # Time management
-        self.max_holding_days = 120  # Extended to 4 months with trailing
+        # 1. Price Action Confirmation
+        self.breakout_strength = 0.03  # 3% above 30-day high
+        self.close_strength = 0.02  # Close 2% above breakout level
+        
+        # 2. Volume Confirmation (very strict)
+        self.volume_surge_min = 2.0  # 2x 20-day average minimum
+        self.volume_surge_ideal = 3.0  # 3x is ideal
+        
+        # 3. RSI Confirmation (momentum sweet spot)
+        self.rsi_min = 55  # Not too weak
+        self.rsi_max = 65  # Not too overbought
+        self.rsi_rising = True  # RSI should be rising
+        
+        # 4. Sector & Market Confirmation
+        self.require_sector_confirmation = True
+        self.require_market_confirmation = True
+        
+        # 5. Trend Strength Requirements
+        self.min_ema_slope = 0.001  # 200 EMA should be rising
+        self.price_above_200ema_pct = 0.05  # 5% above 200 EMA
+        
+        # Risk Management
+        self.initial_stop_atr = 2.0  # 2x ATR initial stop
+        self.trailing_stop_atr = 2.5  # 2.5x ATR trailing
+        self.max_holding_days = 90  # 3 months max
+        
+        # ===== QUALITY SCORING =====
+        self.min_quality_score = 70  # Minimum 70/100 quality score
         
         # Filters
-        self.min_price = 50
-        self.min_avg_volume = 100000
+        self.min_price = 100
+        self.min_avg_volume = 500000  # 5 lakh minimum
         
         # Rate Limiting
         self.request_delay = 1
@@ -102,13 +121,15 @@ logger = setup_logging(config)
 # ==================== DATA FETCHER ====================
 
 class DataFetcher:
-    """Simple data fetcher"""
+    """Data fetcher with index support"""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+        self.nifty_data = None
+        self.nifty_monthly_trend = None
     
     def fetch_data(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data from yfinance"""
@@ -132,23 +153,65 @@ class DataFetcher:
         except Exception as e:
             logger.debug(f"Failed to fetch {ticker}: {e}")
             return None
+    
+    def load_nifty_data(self):
+        """Load Nifty 50 index data"""
+        try:
+            self.nifty_data = self.fetch_data('^NSEI', self.config.data_start)
+            
+            if self.nifty_data is not None:
+                # Calculate monthly trend
+                monthly = self.nifty_data.resample('ME').agg({
+                    'Close': 'last'
+                }).dropna()
+                
+                monthly['EMA_20'] = monthly['Close'].ewm(span=20, adjust=False).mean()
+                monthly['Trend_Up'] = monthly['Close'] > monthly['EMA_20']
+                
+                self.nifty_monthly_trend = monthly['Trend_Up'].reindex(
+                    self.nifty_data.index, method='ffill'
+                )
+                
+                logger.info(f"✓ Nifty 50 loaded: {len(self.nifty_data)} days")
+        except Exception as e:
+            logger.warning(f"Failed to load Nifty data: {e}")
+    
+    def is_nifty_bullish(self, date) -> bool:
+        """Check if Nifty is bullish on monthly timeframe"""
+        if self.nifty_monthly_trend is None:
+            return True  # If no data, don't filter
+        
+        try:
+            trend = self.nifty_monthly_trend[self.nifty_monthly_trend.index <= date]
+            
+            if len(trend) == 0:
+                return True
+            
+            return bool(trend.iloc[-1])
+        except:
+            return True
 
-# ==================== TRAILING STOP BACKTEST ====================
+# ==================== SNIPER BACKTEST ====================
 
-class TrailingStopBroomBacktest:
-    """Broom Breakout with proper trailing stop management"""
+class SniperBroomBacktest:
+    """Sniper Broom Breakout - Quality over quantity"""
     
     def __init__(self, config: Config):
         self.config = config
         self.data_fetcher = DataFetcher()
+        self.data_fetcher.config = config
         self.results = []
         
+        # Load Nifty data
+        self.data_fetcher.load_nifty_data()
+        
         logger.info("=" * 80)
-        logger.info("BROOM BREAKOUT WITH TRAILING STOP")
-        logger.info(f"Initial Stop: {self.config.initial_stop_atr_multiplier}x ATR")
-        logger.info(f"Trailing Stop: {self.config.trailing_stop_atr_multiplier}x ATR")
-        logger.info(f"Percentage Trail: {self.config.trailing_percentage:.0%} from peak")
-        logger.info(f"EMA Trail: {self.config.trailing_ema_period} EMA")
+        logger.info("🎯 SNIPER BROOM BREAKOUT STRATEGY")
+        logger.info("Quality Over Quantity - Multiple Confirmations")
+        logger.info(f"Compression: {self.config.compression_threshold:.0%}")
+        logger.info(f"Volume Surge: {self.config.volume_surge_min}x minimum")
+        logger.info(f"RSI Range: {self.config.rsi_min}-{self.config.rsi_max}")
+        logger.info(f"Breakout Strength: {self.config.breakout_strength:.0%}")
         logger.info("=" * 80)
     
     def save_to_cache(self, ticker: str, df: pd.DataFrame):
@@ -184,15 +247,18 @@ class TrailingStopBroomBacktest:
         return df
     
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate indicators"""
+        """Calculate comprehensive indicators"""
         # EMAs
-        df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
-        df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-        df['EMA_100'] = df['Close'].ewm(span=100, adjust=False).mean()
-        df['EMA_200'] = df['Close'].ewm(span=200, adjust=False).mean()
+        for period in [20, 50, 100, 200]:
+            df[f'EMA_{period}'] = df['Close'].ewm(span=period, adjust=False).mean()
+        
+        # EMA Slopes
+        df['EMA_200_Slope'] = df['EMA_200'].pct_change(5)  # 5-day slope
         
         # Volume
-        df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
+        df['Volume_MA_20'] = df['Volume'].rolling(window=20).mean()
+        df['Volume_MA_50'] = df['Volume'].rolling(window=50).mean()
+        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA_20']
         
         # RSI
         delta = df['Close'].diff()
@@ -200,6 +266,7 @@ class TrailingStopBroomBacktest:
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
+        df['RSI_Rising'] = df['RSI'] > df['RSI'].shift(3)
         
         # ATR
         high_low = df['High'] - df['Low']
@@ -207,50 +274,133 @@ class TrailingStopBroomBacktest:
         low_close = np.abs(df['Low'] - df['Close'].shift())
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = np.max(ranges, axis=1)
-        df['ATR'] = true_range.rolling(self.config.atr_period).mean()
+        df['ATR'] = true_range.rolling(14).mean()
+        
+        # Price position
+        df['Pct_Above_200EMA'] = (df['Close'] - df['EMA_200']) / df['EMA_200']
+        
+        # Rolling highs
+        df['High_30'] = df['High'].rolling(window=30).max()
+        df['High_20'] = df['High'].rolling(window=20).max()
         
         return df
     
-    def is_broom_setup(self, df: pd.DataFrame, idx: int) -> bool:
-        """Check Broom setup"""
+    def calculate_quality_score(self, df: pd.DataFrame, idx: int) -> int:
+        """Calculate quality score 0-100"""
+        score = 0
+        
+        try:
+            current_price = df.iloc[idx]['Close']
+            
+            # 1. Compression quality (25 points)
+            emas = [df.iloc[idx][f'EMA_{p}'] for p in [20, 50, 100, 200]]
+            ema_spread = (max(emas) - min(emas)) / current_price
+            
+            if ema_spread < 0.03:
+                score += 25
+            elif ema_spread < 0.05:
+                score += 20
+            elif ema_spread < 0.07:
+                score += 15
+            elif ema_spread < 0.10:
+                score += 10
+            
+            # 2. Volume surge (25 points)
+            volume_ratio = df.iloc[idx]['Volume_Ratio']
+            
+            if volume_ratio > 3.0:
+                score += 25
+            elif volume_ratio > 2.5:
+                score += 20
+            elif volume_ratio > 2.0:
+                score += 15
+            elif volume_ratio > 1.5:
+                score += 10
+            
+            # 3. RSI quality (20 points)
+            rsi = df.iloc[idx]['RSI']
+            
+            if 58 <= rsi <= 62:
+                score += 20  # Perfect momentum
+            elif 55 <= rsi <= 65:
+                score += 15
+            elif 50 <= rsi <= 70:
+                score += 10
+            
+            # 4. Trend strength (20 points)
+            pct_above_200 = df.iloc[idx]['Pct_Above_200EMA']
+            ema_200_slope = df.iloc[idx]['EMA_200_Slope']
+            
+            if pct_above_200 > 0.10 and ema_200_slope > 0.001:
+                score += 20
+            elif pct_above_200 > 0.05 and ema_200_slope > 0:
+                score += 15
+            elif pct_above_200 > 0.02:
+                score += 10
+            
+            # 5. Consolidation quality (10 points)
+            recent = df.iloc[idx-29:idx+1]
+            box_height = (recent['High'].max() - recent['Low'].min()) / current_price
+            
+            if box_height < 0.05:
+                score += 10
+            elif box_height < 0.08:
+                score += 7
+            elif box_height < 0.10:
+                score += 5
+            
+            return score
+            
+        except Exception as e:
+            return 0
+    
+    def is_sniper_setup(self, df: pd.DataFrame, idx: int, ticker: str) -> Tuple[bool, str, int]:
+        """Check for Sniper setup - ALL conditions must be met"""
+        
+        # 1. Nifty Market Filter
+        if self.config.require_market_confirmation:
+            current_date = df.index[idx]
+            if not self.data_fetcher.is_nifty_bullish(current_date):
+                return False, "Nifty not bullish", 0
+        
+        # 2. Minimum data
         if idx < 200:
-            return False
+            return False, "Insufficient data", 0
         
         current_price = df.iloc[idx]['Close']
         
-        # Price above 200 EMA
-        if current_price <= df.iloc[idx]['EMA_200']:
-            return False
+        # 3. Price above 200 EMA by at least 5%
+        pct_above_200 = df.iloc[idx]['Pct_Above_200EMA']
+        if pd.isna(pct_above_200) or pct_above_200 < self.config.min_ema_slope:
+            return False, "Below 200 EMA", 0
         
-        # EMA Compression
-        emas = [
-            df.iloc[idx]['EMA_20'],
-            df.iloc[idx]['EMA_50'],
-            df.iloc[idx]['EMA_100'],
-            df.iloc[idx]['EMA_200']
-        ]
+        # 4. 200 EMA rising
+        ema_200_slope = df.iloc[idx]['EMA_200_Slope']
+        if pd.isna(ema_200_slope) or ema_200_slope <= 0:
+            return False, "200 EMA not rising", 0
+        
+        # 5. Very tight EMA compression (Broom)
+        emas = [df.iloc[idx][f'EMA_{p}'] for p in [20, 50, 100, 200]]
         
         if any(pd.isna(e) for e in emas):
-            return False
+            return False, "Missing EMA", 0
         
-        ema_max = max(emas)
-        ema_min = min(emas)
-        spread = (ema_max - ema_min) / current_price
+        ema_spread = (max(emas) - min(emas)) / current_price
         
-        if spread > self.config.compression_threshold:
-            return False
+        if ema_spread > self.config.compression_threshold:
+            return False, f"EMA spread too wide: {ema_spread:.2%}", 0
         
-        # Consolidation
-        recent = df.iloc[idx-19:idx+1]
-        box_height = (recent['High'].max() - recent['Low'].min()) / current_price
+        # 6. Tight consolidation
+        recent_30 = df.iloc[idx-29:idx+1]
+        box_height = (recent_30['High'].max() - recent_30['Low'].min()) / current_price
         
         if box_height > self.config.consolidation_height:
-            return False
+            return False, f"Box too wide: {box_height:.2%}", 0
         
-        # Base duration
+        # 7. Base duration
         lookback = df.iloc[max(0, idx-self.config.base_lookback):idx]
-        if len(lookback) < 50:
-            return False
+        if len(lookback) < 100:
+            return False, "Insufficient base", 0
         
         peak_pos = lookback['High'].idxmax()
         peak_idx = df.index.get_loc(peak_pos)
@@ -258,67 +408,39 @@ class TrailingStopBroomBacktest:
         
         if days_since_peak < self.config.base_duration_min or \
            days_since_peak > self.config.base_duration_max:
-            return False
+            return False, f"Bad base duration: {days_since_peak}d", 0
         
-        return True
-    
-    def is_entry_signal(self, df: pd.DataFrame, idx: int) -> bool:
-        """Check entry signal"""
-        current_price = df.iloc[idx]['Close']
+        # 8. STRONG breakout (3% above 30-day high)
+        high_30 = df.iloc[idx]['High_30']
+        if pd.isna(high_30) or current_price < high_30 * (1 + self.config.breakout_strength):
+            return False, "No strong breakout", 0
         
-        # Breakout
-        recent_high = df.iloc[idx-20:idx]['High'].max()
-        if current_price <= recent_high:
-            return False
+        # 9. MASSIVE volume surge (2x minimum)
+        volume_ratio = df.iloc[idx]['Volume_Ratio']
+        if pd.isna(volume_ratio) or volume_ratio < self.config.volume_surge_min:
+            return False, f"Weak volume: {volume_ratio:.1f}x", 0
         
-        # Volume
-        current_volume = df.iloc[idx]['Volume']
-        avg_volume = df.iloc[idx]['Volume_MA']
-        
-        if pd.isna(avg_volume) or avg_volume <= 0:
-            return False
-        
-        if current_volume < self.config.volume_surge * avg_volume:
-            return False
-        
-        # RSI not overbought
+        # 10. RSI in sweet spot (55-65)
         rsi = df.iloc[idx]['RSI']
-        if pd.isna(rsi) or rsi > 75:
-            return False
+        if pd.isna(rsi) or rsi < self.config.rsi_min or rsi > self.config.rsi_max:
+            return False, f"RSI out of range: {rsi:.1f}", 0
         
-        return True
-    
-    def calculate_trailing_stop(self, position: Dict, df: pd.DataFrame, idx: int) -> float:
-        """Calculate trailing stop using multiple methods - use the highest (tightest)"""
-        stops = []
+        # 11. RSI rising
+        rsi_rising = df.iloc[idx]['RSI_Rising']
+        if pd.isna(rsi_rising) or not rsi_rising:
+            return False, "RSI not rising", 0
         
-        current_price = df.iloc[idx]['Close']
-        current_atr = df.iloc[idx]['ATR']
+        # Calculate quality score
+        quality_score = self.calculate_quality_score(df, idx)
         
-        # 1. ATR-based trailing stop
-        if not pd.isna(current_atr) and current_atr > 0:
-            atr_stop = position['highest_price'] - (self.config.trailing_stop_atr_multiplier * current_atr)
-            stops.append(atr_stop)
+        # 12. Quality score threshold
+        if quality_score < self.config.min_quality_score:
+            return False, f"Quality too low: {quality_score}", quality_score
         
-        # 2. Percentage trailing stop from peak
-        if self.config.use_percentage_trailing:
-            pct_stop = position['highest_price'] * (1 - self.config.trailing_percentage)
-            stops.append(pct_stop)
-        
-        # 3. EMA-based trailing stop
-        if self.config.use_ema_trailing:
-            ema_trail = df.iloc[idx][f'EMA_{self.config.trailing_ema_period}']
-            if not pd.isna(ema_trail):
-                stops.append(ema_trail)
-        
-        # 4. Previous stop (don't let stop decrease)
-        stops.append(position['stop_loss'])
-        
-        # Return the highest stop (tightest)
-        return max(stops)
+        return True, f"SNIPER SETUP! Score: {quality_score}", quality_score
     
     def run_backtest(self, df: pd.DataFrame, ticker: str) -> List[Dict]:
-        """Run backtest with trailing stops"""
+        """Run sniper backtest"""
         trades = []
         position = None
         
@@ -344,16 +466,17 @@ class TrailingStopBroomBacktest:
                     continue
                 
                 if position is None:
-                    # Look for entry
-                    if self.is_broom_setup(df, idx) and self.is_entry_signal(df, idx):
+                    # Check Sniper setup
+                    is_setup, reason, score = self.is_sniper_setup(df, idx, ticker)
+                    
+                    if is_setup:
                         entry_price = current_price
                         atr = df.iloc[idx]['ATR']
                         
-                        # Initial stop loss: 2x ATR below entry
+                        # Initial stop: 2x ATR
                         if not pd.isna(atr) and atr > 0:
-                            initial_stop = entry_price - (self.config.initial_stop_atr_multiplier * atr)
+                            initial_stop = entry_price - (self.config.initial_stop_atr * atr)
                         else:
-                            # Fallback to percentage
                             initial_stop = entry_price * 0.95
                         
                         position = {
@@ -361,16 +484,15 @@ class TrailingStopBroomBacktest:
                             'entry_price': entry_price,
                             'stop_loss': initial_stop,
                             'highest_price': entry_price,
-                            'atr_at_entry': atr if not pd.isna(atr) else 0,
-                            'trailing_activated': False
+                            'quality_score': score,
+                            'atr': atr if not pd.isna(atr) else 0
                         }
                         
-                        logger.info(f"🚀 ENTRY: {ticker} @ ₹{entry_price:.2f} | "
-                                  f"Initial Stop: ₹{initial_stop:.2f} | "
-                                  f"ATR: ₹{atr:.2f}")
+                        logger.info(f"🎯 SNIPER ENTRY: {ticker} @ ₹{entry_price:.2f} | "
+                                  f"Score: {score}/100 | {reason}")
                 
                 else:
-                    # Manage position with trailing stop
+                    # Manage position
                     current_high = df.iloc[idx]['High']
                     current_low = df.iloc[idx]['Low']
                     days_held = (date - position['entry_date']).days
@@ -379,22 +501,18 @@ class TrailingStopBroomBacktest:
                     if current_high > position['highest_price']:
                         position['highest_price'] = current_high
                     
-                    # Calculate new trailing stop
-                    new_stop = self.calculate_trailing_stop(position, df, idx)
+                    # Trailing stop: 2.5x ATR from highest
+                    current_atr = df.iloc[idx]['ATR']
+                    if not pd.isna(current_atr) and current_atr > 0:
+                        trail_stop = position['highest_price'] - (self.config.trailing_stop_atr * current_atr)
+                        if trail_stop > position['stop_loss']:
+                            position['stop_loss'] = trail_stop
                     
-                    # Only move stop up, never down
-                    if new_stop > position['stop_loss']:
-                        position['stop_loss'] = new_stop
-                        position['trailing_activated'] = True
-                    
-                    # Check stop loss
+                    # Check stop
                     if current_low <= position['stop_loss']:
                         exit_price = position['stop_loss']
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
-                        
-                        # Calculate profit from peak
                         peak_profit = (position['highest_price'] - position['entry_price']) / position['entry_price'] * 100
-                        giveback = (position['highest_price'] - exit_price) / position['entry_price'] * 100
                         
                         trades.append({
                             'ticker': ticker,
@@ -402,24 +520,23 @@ class TrailingStopBroomBacktest:
                             'exit_date': date,
                             'entry_price': position['entry_price'],
                             'exit_price': exit_price,
-                            'highest_price': position['highest_price'],
                             'return_pct': return_pct,
                             'peak_profit': peak_profit,
-                            'giveback': giveback,
+                            'quality_score': position['quality_score'],
                             'exit_reason': 'trailing_stop',
                             'days_held': days_held
                         })
                         
-                        logger.info(f"🛑 TRAILING STOP: {ticker} | "
+                        logger.info(f"🛑 EXIT: {ticker} | "
                                   f"Return: {return_pct:.2f}% | "
                                   f"Peak: {peak_profit:.2f}% | "
-                                  f"Giveback: {giveback:.2f}% | "
+                                  f"Score: {position['quality_score']} | "
                                   f"{days_held}d")
                         
                         position = None
                         continue
                     
-                    # Time exit (extended due to trailing)
+                    # Time exit
                     if days_held >= self.config.max_holding_days:
                         exit_price = current_price
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
@@ -431,15 +548,13 @@ class TrailingStopBroomBacktest:
                             'exit_date': date,
                             'entry_price': position['entry_price'],
                             'exit_price': exit_price,
-                            'highest_price': position['highest_price'],
                             'return_pct': return_pct,
                             'peak_profit': peak_profit,
-                            'giveback': peak_profit - return_pct,
+                            'quality_score': position['quality_score'],
                             'exit_reason': 'time_exit',
                             'days_held': days_held
                         })
                         
-                        logger.info(f"⏰ TIME EXIT: {ticker} | {return_pct:.2f}% | {days_held}d")
                         position = None
             
             # Close open position
@@ -457,10 +572,9 @@ class TrailingStopBroomBacktest:
                     'exit_date': last_date,
                     'entry_price': position['entry_price'],
                     'exit_price': last_price,
-                    'highest_price': position['highest_price'],
                     'return_pct': return_pct,
                     'peak_profit': peak_profit,
-                    'giveback': peak_profit - return_pct,
+                    'quality_score': position['quality_score'],
                     'exit_reason': 'end_of_period',
                     'days_held': days_held
                 })
@@ -476,7 +590,7 @@ class TrailingStopBroomBacktest:
             return {
                 'total_trades': 0, 'win_rate': 0, 'total_return': 0,
                 'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0, 'avg_peak_profit': 0, 'avg_giveback': 0
+                'avg_days_held': 0, 'avg_quality': 0
             }
         
         try:
@@ -489,8 +603,7 @@ class TrailingStopBroomBacktest:
             win_rate = len(winners) / total_trades * 100
             total_return = df['return_pct'].sum()
             avg_return = df['return_pct'].mean()
-            avg_peak_profit = df['peak_profit'].mean()
-            avg_giveback = df['giveback'].mean()
+            avg_quality = df['quality_score'].mean()
             
             gross_profit = winners['return_pct'].sum() if len(winners) > 0 else 0
             gross_loss = abs(losers['return_pct'].sum()) if len(losers) > 0 else 0
@@ -507,10 +620,6 @@ class TrailingStopBroomBacktest:
             
             avg_days = df['days_held'].mean()
             
-            # Best and worst trades
-            best_trade = df['return_pct'].max()
-            worst_trade = df['return_pct'].min()
-            
             return {
                 'total_trades': total_trades,
                 'win_rate': win_rate,
@@ -519,26 +628,23 @@ class TrailingStopBroomBacktest:
                 'profit_factor': profit_factor,
                 'max_drawdown': drawdown,
                 'avg_days_held': avg_days,
-                'avg_peak_profit': avg_peak_profit,
-                'avg_giveback': avg_giveback,
-                'best_trade': best_trade,
-                'worst_trade': worst_trade
+                'avg_quality': avg_quality
             }
         except Exception as e:
             return {
                 'total_trades': 0, 'win_rate': 0, 'total_return': 0,
                 'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0, 'avg_peak_profit': 0, 'avg_giveback': 0,
-                'best_trade': 0, 'worst_trade': 0
+                'avg_days_held': 0, 'avg_quality': 0
             }
     
     def run_universe(self, tickers: List[str]) -> pd.DataFrame:
-        """Run backtest for universe"""
+        """Run sniper backtest"""
         all_trades = []
         stock_results = []
+        sniper_count = 0
         
         logger.info("=" * 80)
-        logger.info(f"STARTING BACKTEST FOR {len(tickers)} STOCKS")
+        logger.info(f"🎯 SNIPER BACKTEST - {len(tickers)} STOCKS")
         logger.info("=" * 80)
         
         for i, ticker in enumerate(tickers):
@@ -549,14 +655,6 @@ class TrailingStopBroomBacktest:
                 
                 if df is None or len(df) < 250:
                     logger.warning(f"  ✗ Insufficient data")
-                    stock_results.append({
-                        'ticker': ticker,
-                        'total_trades': 0, 'win_rate': 0, 'total_return': 0,
-                        'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                        'avg_days_held': 0, 'avg_peak_profit': 0, 'avg_giveback': 0,
-                        'best_trade': 0, 'worst_trade': 0,
-                        'processed': False, 'reason': 'insufficient_data'
-                    })
                     continue
                 
                 trades = self.run_backtest(df, ticker)
@@ -565,24 +663,15 @@ class TrailingStopBroomBacktest:
                     all_trades.extend(trades)
                     metrics = self.calculate_metrics(trades)
                     metrics['ticker'] = ticker
-                    metrics['processed'] = True
-                    metrics['reason'] = 'success'
                     stock_results.append(metrics)
+                    sniper_count += len(trades)
                     
-                    logger.info(f"  ✓ {metrics['total_trades']} trades | "
+                    logger.info(f"  🎯 {metrics['total_trades']} SNIPER trades | "
                               f"Win: {metrics['win_rate']:.0f}% | "
                               f"Return: {metrics['total_return']:.1f}% | "
-                              f"PF: {metrics['profit_factor']:.2f}")
+                              f"Avg Quality: {metrics['avg_quality']:.0f}")
                 else:
-                    logger.info(f"  - No trades")
-                    stock_results.append({
-                        'ticker': ticker,
-                        'total_trades': 0, 'win_rate': 0, 'total_return': 0,
-                        'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                        'avg_days_held': 0, 'avg_peak_profit': 0, 'avg_giveback': 0,
-                        'best_trade': 0, 'worst_trade': 0,
-                        'processed': True, 'reason': 'no_trades'
-                    })
+                    logger.info(f"  - No sniper setups found")
                 
                 del df, trades
                 gc.collect()
@@ -591,59 +680,60 @@ class TrailingStopBroomBacktest:
                 
             except Exception as e:
                 logger.error(f"  ✗ Error: {e}")
-                stock_results.append({
-                    'ticker': ticker,
-                    'total_trades': 0, 'win_rate': 0, 'total_return': 0,
-                    'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                    'avg_days_held': 0, 'avg_peak_profit': 0, 'avg_giveback': 0,
-                    'best_trade': 0, 'worst_trade': 0,
-                    'processed': False, 'reason': f'error: {str(e)}'
-                })
         
         # Overall summary
         if all_trades:
             overall = self.calculate_metrics(all_trades)
             
             logger.info("\n" + "=" * 80)
-            logger.info("OVERALL RESULTS")
-            logger.info(f"Total trades: {overall['total_trades']}")
+            logger.info("🎯 SNIPER RESULTS")
+            logger.info(f"Total sniper trades: {overall['total_trades']}")
             logger.info(f"Win rate: {overall['win_rate']:.1f}%")
             logger.info(f"Total return: {overall['total_return']:.1f}%")
             logger.info(f"Profit factor: {overall['profit_factor']:.2f}")
-            logger.info(f"Average peak profit: {overall['avg_peak_profit']:.1f}%")
-            logger.info(f"Average giveback: {overall['avg_giveback']:.1f}%")
-            logger.info(f"Best trade: {overall['best_trade']:.1f}%")
-            logger.info(f"Worst trade: {overall['worst_trade']:.1f}%")
+            logger.info(f"Average quality score: {overall['avg_quality']:.0f}/100")
             logger.info(f"Max drawdown: {overall['max_drawdown']:.1f}%")
             logger.info("=" * 80)
         
         # Save results
         results_df = pd.DataFrame(stock_results)
-        if results_df.empty:
-            results_df = pd.DataFrame(columns=['ticker', 'processed', 'reason'])
-        
-        results_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
-        logger.info(f"\nResults saved to nifty500_broom_breakout_results.csv")
+        if not results_df.empty:
+            results_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
+            logger.info(f"\nResults saved to nifty500_broom_breakout_results.csv")
+        else:
+            # Create empty file
+            pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return']).to_csv(
+                'nifty500_broom_breakout_results.csv', index=False
+            )
         
         return results_df
 
 # ==================== UNIVERSE ====================
 
 def get_universe() -> List[str]:
-    """Get universe"""
+    """Get universe - focus on quality stocks"""
     return [
+        # High quality large caps
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-        'ADANIENT.NS', 'ADANIPORTS.NS', 'APOLLOHOSP.NS', 'BAJAJ-AUTO.NS',
-        'BAJAJFINSV.NS', 'BPCL.NS', 'BRITANNIA.NS', 'CIPLA.NS',
-        'COALINDIA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
-        'GRASIM.NS', 'HCLTECH.NS', 'HDFCLIFE.NS', 'HEROMOTOCO.NS',
-        'HINDALCO.NS', 'INDUSINDBK.NS', 'JSWSTEEL.NS', 'M&M.NS',
-        'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS', 'SBILIFE.NS',
-        'SHRIRAMFIN.NS', 'TATACONSUM.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS',
-        'TECHM.NS', 'UPL.NS',
+        'HINDUNILVR.NS', 'ITC.NS', 'KOTAKBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS',
+        'MARUTI.NS', 'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS',
+        'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'BRITANNIA.NS', 'DABUR.NS',
+        
+        # Quality midcaps
+        'PIDILITIND.NS', 'HAVELLS.NS', 'ASTRAL.NS', 'DIXON.NS', 'TRENT.NS',
+        'DMART.NS', 'CUMMINSIND.NS', 'VOLTAS.NS', 'CROMPTON.NS', 'KEI.NS',
+        'POLYCAB.NS', 'SUPREMEIND.NS', 'WHIRLPOOL.NS', 'BLUESTARCO.NS',
+        
+        # Pharma leaders
+        'LUPIN.NS', 'AUROPHARMA.NS', 'BIOCON.NS', 'GLENMARK.NS', 'ALKEM.NS',
+        'TORNTPHARM.NS', 'ZYDUSLIFE.NS',
+        
+        # Auto leaders
+        'TATAMOTORS.NS', 'M&M.NS', 'BAJAJ-AUTO.NS', 'EICHERMOT.NS', 'TVSMOTOR.NS',
+        
+        # IT leaders
+        'HCLTECH.NS', 'TECHM.NS', 'LTIM.NS', 'MPHASIS.NS', 'COFORGE.NS',
+        'PERSISTENT.NS',
     ]
 
 # ==================== MAIN ====================
@@ -652,16 +742,17 @@ def main():
     """Main execution"""
     try:
         logger.info("=" * 80)
-        logger.info("BROOM BREAKOUT WITH TRAILING STOP-LOSS")
+        logger.info("🎯 SNIPER BROOM BREAKOUT STRATEGY")
+        logger.info("Quality Over Quantity")
         logger.info("=" * 80)
         
         tickers = get_universe()
         
-        engine = TrailingStopBroomBacktest(config)
+        engine = SniperBroomBacktest(config)
         
         results = engine.run_universe(tickers)
         
-        logger.info("\n✅ BACKTEST COMPLETED")
+        logger.info("\n✅ SNIPER BACKTEST COMPLETED")
         
         return results
         
@@ -670,8 +761,9 @@ def main():
         logger.error(traceback.format_exc())
         
         # Create empty results file
-        empty_df = pd.DataFrame(columns=['ticker', 'processed', 'reason'])
-        empty_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
+        pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return']).to_csv(
+            'nifty500_broom_breakout_results.csv', index=False
+        )
         
         sys.exit(1)
 
