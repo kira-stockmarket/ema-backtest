@@ -1,6 +1,6 @@
 """
-Broom Breakout Strategy - RESTORED ORIGINAL LOGIC
-Back to the working version with minor improvements
+Time-Boxed Self-Improving Broom Breakout Strategy
+Runs for 1 hour, continuously learning and improving
 """
 
 import pandas as pd
@@ -15,57 +15,67 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
 import requests
 from pathlib import Path
+import json
 import traceback
+import random
+from itertools import product
 
 warnings.filterwarnings('ignore')
 
 # ==================== CONFIGURATION ====================
 
 class Config:
-    """Original working configuration"""
+    """Configuration for time-boxed self-improving strategy"""
     
     def __init__(self):
         self.is_github_actions = os.getenv('GITHUB_ACTIONS', 'false').lower() == 'true'
         
+        # TIME BOX
+        self.max_runtime_minutes = int(os.getenv('MAX_RUNTIME_MINUTES', '60'))  # 1 hour
+        self.start_time = time.time()
+        
         # Backtest Period
         self.backtest_start = '2018-01-01'
-        self.data_start = '2000-01-01'  # Original had 2000
+        self.data_start = '2000-01-01'
         
         # Universe
-        self.universe_size = int(os.getenv('UNIVERSE_SIZE', '20'))
-        self.batch_size = int(os.getenv('BATCH_SIZE', '5'))
+        self.universe_size = int(os.getenv('UNIVERSE_SIZE', '50'))
+        self.batch_size = int(os.getenv('BATCH_SIZE', '10'))
         
-        # ORIGINAL Strategy Parameters
+        # Base Strategy Parameters
         self.ema_periods = [20, 50, 100, 200]
         self.weekly_ema_period = 200
         self.monthly_ema_period = 200
         
-        # ORIGINAL Broom Compression - 8%
+        # Parameters that will be optimized
         self.broom_compression_threshold = 0.08
-        
-        # ORIGINAL Base Parameters
-        self.base_lookback_period = 200
-        self.base_duration_min = 63  # 3 months
-        self.base_duration_max = 147  # 7 months
-        
-        # ORIGINAL Box Consolidation - 15%
+        self.base_duration_min = 63
+        self.base_duration_max = 147
         self.box_consolidation_height = 0.15
-        
-        # ORIGINAL Trend Exhaustion - 60%
-        self.prior_trend_exhaustion_limit = 0.60
-        
-        # ORIGINAL Execution Parameters
-        self.volume_poc_bins = 10
-        self.poc_lookback = 20
         self.volume_threshold_multiplier = 1.5
-        self.volume_ma_period = 50
-        self.stop_loss_buffer = 0.015  # 1.5% below 200 EMA
-        self.measured_move_multiplier = 2
+        self.stop_loss_buffer = 0.015
+        self.measured_move_multiplier = 2.0
+        
+        # Parameter ranges for optimization
+        self.param_ranges = {
+            'broom_compression_threshold': [0.06, 0.08, 0.10, 0.12, 0.15],
+            'base_duration_min': [40, 50, 63, 80],
+            'base_duration_max': [120, 147, 180, 200],
+            'box_consolidation_height': [0.10, 0.15, 0.20, 0.25],
+            'volume_threshold_multiplier': [1.2, 1.5, 1.8, 2.0],
+            'stop_loss_buffer': [0.01, 0.015, 0.02, 0.025],
+            'measured_move_multiplier': [1.5, 2.0, 2.5, 3.0],
+        }
+        
+        # Learning settings
+        self.min_trades_per_iteration = 5
+        self.iterations_completed = 0
+        self.best_score = -float('inf')
+        self.best_params = {}
         
         # Rate Limiting
-        self.request_delay = 2
-        self.batch_delay = 10
-        self.max_retries = 3
+        self.request_delay = 0.5  # Faster for optimization
+        self.batch_delay = 2
         
         # Cache
         self.cache_enabled = True
@@ -75,9 +85,20 @@ class Config:
         self.data_dir = Path('data_cache')
         self.results_dir = Path('results')
         self.logs_dir = Path('logs')
+        self.optimization_dir = Path('optimization')
         
-        for dir_path in [self.data_dir, self.results_dir, self.logs_dir]:
+        for dir_path in [self.data_dir, self.results_dir, self.logs_dir, self.optimization_dir]:
             dir_path.mkdir(exist_ok=True)
+    
+    def time_remaining(self) -> float:
+        """Check remaining time in seconds"""
+        elapsed = time.time() - self.start_time
+        remaining = (self.max_runtime_minutes * 60) - elapsed
+        return max(0, remaining)
+    
+    def should_continue(self) -> bool:
+        """Check if we should continue running"""
+        return self.time_remaining() > 0
 
 # ==================== LOGGING ====================
 
@@ -87,7 +108,7 @@ def setup_logging(config: Config):
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(config.logs_dir / 'backtest.log'),
+            logging.FileHandler(config.logs_dir / 'optimization.log'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -99,13 +120,14 @@ logger = setup_logging(config)
 # ==================== DATA FETCHER ====================
 
 class DataFetcher:
-    """Original data fetcher"""
+    """Data fetcher with caching for speed"""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+        self.data_pool = {}  # Pre-loaded data pool
     
     def fetch_data(self, ticker: str, start_date: str) -> Optional[pd.DataFrame]:
         """Fetch data from yfinance"""
@@ -127,96 +149,166 @@ class DataFetcher:
             return None
             
         except Exception as e:
-            logger.debug(f"Failed to fetch {ticker}: {e}")
             return None
+    
+    def preload_data(self, tickers: List[str], start_date: str):
+        """Preload all data into memory for faster iterations"""
+        logger.info("📦 Preloading data for all stocks...")
+        
+        for ticker in tickers:
+            if ticker not in self.data_pool:
+                df = self.fetch_data(ticker, start_date)
+                if df is not None and len(df) > 300:
+                    self.data_pool[ticker] = df
+                    logger.debug(f"  ✓ {ticker}: {len(df)} rows")
+                else:
+                    logger.warning(f"  ✗ {ticker}: insufficient data")
+                
+                time.sleep(0.3)  # Small delay
+        
+        logger.info(f"✓ Preloaded {len(self.data_pool)} stocks")
+    
+    def get_data(self, ticker: str) -> Optional[pd.DataFrame]:
+        """Get data from pool"""
+        return self.data_pool.get(ticker)
 
-# ==================== ORIGINAL BACKTEST ENGINE ====================
+# ==================== OPTIMIZATION ENGINE ====================
 
-class OriginalBroomBacktest:
-    """Original working Broom Breakout strategy"""
+class OptimizationEngine:
+    """Optimization engine that tests different parameter combinations"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.data_fetcher = DataFetcher()
-        self.results = []
-        
-        logger.info("=" * 80)
-        logger.info("ORIGINAL BROOM BREAKOUT STRATEGY")
-        logger.info(f"Compression: {self.config.broom_compression_threshold:.0%}")
-        logger.info(f"Box Height: {self.config.box_consolidation_height:.0%}")
-        logger.info(f"Volume: {self.config.volume_threshold_multiplier}x")
-        logger.info("=" * 80)
+        self.results_history = []
+        self.best_result = None
     
-    def save_to_cache(self, ticker: str, df: pd.DataFrame):
-        """Cache data"""
+    def generate_parameter_combinations(self) -> List[Dict]:
+        """Generate parameter combinations to test"""
+        # Start with current best
+        combinations = [self.config.best_params] if self.config.best_params else []
+        
+        # Add random mutations
+        for _ in range(5):
+            params = {}
+            for key, values in self.config.param_ranges.items():
+                if self.config.best_params and key in self.config.best_params:
+                    # Mutate around best
+                    current = self.config.best_params[key]
+                    idx = values.index(current) if current in values else len(values)//2
+                    # Random walk
+                    idx = max(0, min(len(values)-1, idx + random.randint(-1, 1)))
+                    params[key] = values[idx]
+                else:
+                    # Random selection
+                    params[key] = random.choice(values)
+            combinations.append(params)
+        
+        # Add random combinations
+        for _ in range(3):
+            params = {}
+            for key, values in self.config.param_ranges.items():
+                params[key] = random.choice(values)
+            combinations.append(params)
+        
+        return combinations
+    
+    def evaluate_result(self, metrics: Dict, params: Dict) -> float:
+        """Score a result - higher is better"""
+        if metrics['total_trades'] < self.config.min_trades_per_iteration:
+            return -float('inf')
+        
+        # Score = weighted combination
+        score = (
+            metrics['win_rate'] * 0.3 +
+            min(metrics['profit_factor'], 5.0) * 10 * 0.3 +
+            min(metrics['total_return'], 100) * 0.2 +
+            metrics['avg_return'] * 0.2
+        )
+        
+        # Penalize too few trades
+        if metrics['total_trades'] < 10:
+            score *= 0.5
+        
+        return score
+    
+    def update_best(self, params: Dict, metrics: Dict, score: float):
+        """Update best parameters if score is better"""
+        if score > self.config.best_score:
+            self.config.best_score = score
+            self.config.best_params = params.copy()
+            
+            logger.info(f"\n🏆 NEW BEST PARAMETERS FOUND!")
+            logger.info(f"  Score: {score:.2f}")
+            logger.info(f"  Win Rate: {metrics['win_rate']:.1f}%")
+            logger.info(f"  Profit Factor: {metrics['profit_factor']:.2f}")
+            logger.info(f"  Total Return: {metrics['total_return']:.1f}%")
+            logger.info(f"  Parameters:")
+            for key, value in params.items():
+                logger.info(f"    {key}: {value}")
+            
+            # Save best params
+            self.save_best_params()
+    
+    def save_best_params(self):
+        """Save best parameters to file"""
         try:
-            cache_file = self.config.data_dir / f"{ticker.replace('.', '_')}.csv"
-            df.to_csv(cache_file)
-        except:
-            pass
+            best_file = self.config.optimization_dir / 'best_params.json'
+            data = {
+                'params': self.config.best_params,
+                'score': self.config.best_score,
+                'iterations': self.config.iterations_completed,
+                'timestamp': datetime.now().isoformat()
+            }
+            with open(best_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save best params: {e}")
     
-    def load_from_cache(self, ticker: str) -> Optional[pd.DataFrame]:
-        """Load from cache"""
+    def save_iteration_history(self):
+        """Save all iteration results"""
         try:
-            cache_file = self.config.data_dir / f"{ticker.replace('.', '_')}.csv"
-            if cache_file.exists():
-                file_age = time.time() - cache_file.stat().st_mtime
-                if file_age < self.config.cache_expiry_days * 24 * 3600:
-                    return pd.read_csv(cache_file, index_col=0, parse_dates=True)
-        except:
-            pass
-        return None
+            history_file = self.config.optimization_dir / 'iteration_history.json'
+            with open(history_file, 'w') as f:
+                json.dump(self.results_history, f, indent=2, default=str)
+        except Exception as e:
+            logger.warning(f"Failed to save history: {e}")
+
+# ==================== BACKTEST ENGINE ====================
+
+class FastBacktest:
+    """Fast backtest engine for optimization"""
     
-    def get_data(self, ticker: str) -> Optional[pd.DataFrame]:
-        """Get data with caching"""
-        df = self.load_from_cache(ticker)
-        if df is not None:
-            return df
-        
-        df = self.data_fetcher.fetch_data(ticker, self.config.data_start)
-        if df is not None:
-            self.save_to_cache(ticker, df)
-        
-        return df
+    def __init__(self, config: Config, data_fetcher: DataFetcher):
+        self.config = config
+        self.data_fetcher = data_fetcher
     
     def calculate_emas(self, df: pd.DataFrame) -> pd.DataFrame:
-        """ORIGINAL EMA calculation"""
-        # Daily EMAs
+        """Calculate EMAs"""
         for period in self.config.ema_periods:
             df[f'EMA_{period}'] = df['Close'].ewm(span=period, adjust=False).mean()
-        
         return df
     
     def create_higher_timeframes(self, df: pd.DataFrame) -> pd.DataFrame:
-        """ORIGINAL higher timeframe creation"""
+        """Create higher timeframes"""
         try:
-            # Weekly
             weekly_df = df.resample('W-FRI').agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
+                'Open': 'first', 'High': 'max', 'Low': 'min',
+                'Close': 'last', 'Volume': 'sum'
             }).dropna()
             
             weekly_df[f'EMA_{self.config.weekly_ema_period}_Weekly'] = weekly_df['Close'].ewm(
                 span=self.config.weekly_ema_period, adjust=False
             ).mean()
             
-            # Monthly
             monthly_df = df.resample('ME').agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
+                'Open': 'first', 'High': 'max', 'Low': 'min',
+                'Close': 'last', 'Volume': 'sum'
             }).dropna()
             
             monthly_df[f'EMA_{self.config.monthly_ema_period}_Monthly'] = monthly_df['Close'].ewm(
                 span=self.config.monthly_ema_period, adjust=False
             ).mean()
             
-            # Map back to daily
             df['Weekly_200_EMA'] = weekly_df[f'EMA_{self.config.weekly_ema_period}_Weekly'].reindex(
                 df.index, method='ffill'
             )
@@ -224,169 +316,19 @@ class OriginalBroomBacktest:
                 df.index, method='ffill'
             )
             
-        except Exception as e:
-            logger.debug(f"Error creating higher timeframes: {e}")
+        except Exception:
             df['Weekly_200_EMA'] = np.nan
             df['Monthly_200_EMA'] = np.nan
         
         return df
     
-    def check_broom_setup(self, df: pd.DataFrame, idx: int) -> bool:
-        """ORIGINAL broom setup check"""
-        if idx < self.config.base_lookback_period:
-            return False
-        
-        try:
-            current_price = df.iloc[idx]['Close']
-            if pd.isna(current_price) or current_price <= 0:
-                return False
-            
-            # 1. Macro Trend Filter - ORIGINAL
-            weekly_ema = df.iloc[idx]['Weekly_200_EMA']
-            if pd.isna(weekly_ema):
-                return False
-            if current_price <= weekly_ema:
-                return False
-            
-            monthly_ema = df.iloc[idx]['Monthly_200_EMA']
-            if not pd.isna(monthly_ema):
-                if current_price <= monthly_ema:
-                    return False
-            
-            # 2. EMA Broom Compression - ORIGINAL
-            ema_values = []
-            for period in self.config.ema_periods:
-                ema_val = df.iloc[idx][f'EMA_{period}']
-                if pd.isna(ema_val):
-                    return False
-                ema_values.append(ema_val)
-            
-            ema_high = max(ema_values)
-            ema_low = min(ema_values)
-            ema_spread = (ema_high - ema_low) / current_price
-            
-            if ema_spread >= self.config.broom_compression_threshold:
-                return False
-            
-            # 3. Base Duration Check - ORIGINAL
-            lookback_data = df.iloc[max(0, idx - self.config.base_lookback_period):idx]
-            if len(lookback_data) < self.config.base_lookback_period:
-                return False
-            
-            peak_idx = lookback_data['High'].idxmax()
-            peak_price = lookback_data['High'].max()
-            peak_position = df.index.get_loc(peak_idx)
-            days_since_peak = idx - peak_position
-            
-            if days_since_peak < self.config.base_duration_min or days_since_peak > self.config.base_duration_max:
-                return False
-            
-            # 4. Flat Box Consolidation - ORIGINAL
-            recent_20 = df.iloc[idx-19:idx+1]
-            box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
-            
-            if box_height >= self.config.box_consolidation_height:
-                return False
-            
-            # 5. Prior Trend Exhaustion - ORIGINAL
-            pre_peak_data = df.iloc[max(0, peak_position - self.config.base_lookback_period):peak_position+1]
-            if len(pre_peak_data) > 0:
-                lowest_low = pre_peak_data['Low'].min()
-                run_up = (peak_price - lowest_low) / lowest_low
-                
-                if run_up > self.config.prior_trend_exhaustion_limit:
-                    return False
-            
-            return True
-            
-        except Exception as e:
-            logger.debug(f"Error in broom setup: {e}")
-            return False
-    
-    def calculate_volume_profile_poc(self, df: pd.DataFrame, idx: int) -> Optional[float]:
-        """ORIGINAL Volume Profile POC"""
-        if idx < self.config.poc_lookback:
-            return None
-        
-        try:
-            recent_data = df.iloc[idx - self.config.poc_lookback + 1:idx + 1]
-            
-            price_range = recent_data['High'].max() - recent_data['Low'].min()
-            if price_range == 0:
-                return None
-            
-            bins = np.linspace(recent_data['Low'].min(), recent_data['High'].max(), 
-                             self.config.volume_poc_bins + 1)
-            volume_by_bin = np.zeros(self.config.volume_poc_bins)
-            
-            for i in range(len(recent_data)):
-                row = recent_data.iloc[i]
-                price_low = row['Low']
-                price_high = row['High']
-                volume = row['Volume']
-                
-                if price_high > price_low:
-                    for j in range(self.config.volume_poc_bins):
-                        bin_low = bins[j]
-                        bin_high = bins[j + 1]
-                        
-                        overlap_low = max(price_low, bin_low)
-                        overlap_high = min(price_high, bin_high)
-                        
-                        if overlap_high > overlap_low:
-                            overlap_percentage = (overlap_high - overlap_low) / (price_high - price_low)
-                            volume_by_bin[j] += volume * overlap_percentage
-            
-            poc_bin_idx = np.argmax(volume_by_bin)
-            poc_price = (bins[poc_bin_idx] + bins[poc_bin_idx + 1]) / 2
-            
-            return poc_price
-            
-        except Exception as e:
-            return None
-    
-    def check_entry_signal(self, df: pd.DataFrame, idx: int) -> bool:
-        """ORIGINAL entry signal"""
-        try:
-            current_price = df.iloc[idx]['Close']
-            
-            # Get highest EMA
-            ema_values = [df.iloc[idx][f'EMA_{period}'] for period in self.config.ema_periods]
-            highest_ema = max(ema_values)
-            
-            # Calculate Volume Profile POC
-            poc_price = self.calculate_volume_profile_poc(df, idx)
-            if poc_price is None:
-                return False
-            
-            # Check breakout conditions
-            if current_price <= highest_ema:
-                return False
-            if current_price <= poc_price:
-                return False
-            
-            # Volume confirmation
-            if idx < self.config.volume_ma_period:
-                return False
-            
-            volume_ma = df.iloc[idx - self.config.volume_ma_period:idx]['Volume'].mean()
-            current_volume = df.iloc[idx]['Volume']
-            
-            if current_volume <= self.config.volume_threshold_multiplier * volume_ma:
-                return False
-            
-            return True
-            
-        except Exception as e:
-            return False
-    
-    def run_backtest(self, df: pd.DataFrame, ticker: str) -> List[Dict]:
-        """ORIGINAL backtest"""
+    def run_backtest_with_params(self, df: pd.DataFrame, ticker: str) -> List[Dict]:
+        """Run backtest with current parameters"""
         trades = []
         position = None
         
         try:
-            df = self.calculate_emas(df)
+            df = self.calculate_emas(df.copy())
             df = self.create_higher_timeframes(df)
             
             backtest_df = df[df.index >= self.config.backtest_start].copy()
@@ -398,266 +340,265 @@ class OriginalBroomBacktest:
                 idx = df.index.get_loc(date)
                 
                 if position is None:
-                    # Check for setup and entry
-                    if self.check_broom_setup(df, idx):
-                        if self.check_entry_signal(df, idx):
-                            entry_price = df.iloc[idx]['Close']
-                            stop_loss = df.iloc[idx]['EMA_200'] * (1 - self.config.stop_loss_buffer)
-                            
-                            # Calculate take profit
-                            lookback_data = df.iloc[max(0, idx - self.config.base_lookback_period):idx]
-                            peak_price = lookback_data['High'].max()
-                            peak_pos = df.index.get_loc(lookback_data['High'].idxmax())
-                            consolidation_data = df.iloc[peak_pos:idx+1]
-                            lowest_price = consolidation_data['Low'].min()
-                            base_depth = peak_price - lowest_price
-                            take_profit = entry_price + (self.config.measured_move_multiplier * base_depth)
-                            
-                            position = {
-                                'entry_date': date,
-                                'entry_price': entry_price,
-                                'stop_loss': stop_loss,
-                                'take_profit': take_profit,
-                                'base_depth': base_depth,
-                                'highest_price': entry_price,
-                                'atr': df.iloc[idx]['Close'] * 0.02  # Simple 2% ATR fallback
-                            }
-                            
-                            logger.info(f"🚀 ENTRY: {ticker} @ ₹{entry_price:.2f} on {date.date()} | "
-                                      f"Stop: ₹{stop_loss:.2f} | Target: ₹{take_profit:.2f}")
-                
+                    # Broom setup check
+                    if idx < self.config.base_duration_max + 200:
+                        continue
+                    
+                    current_price = df.iloc[idx]['Close']
+                    
+                    # Trend filter
+                    weekly_ema = df.iloc[idx]['Weekly_200_EMA']
+                    if pd.isna(weekly_ema) or current_price <= weekly_ema:
+                        continue
+                    
+                    # EMA compression
+                    emas = [df.iloc[idx][f'EMA_{p}'] for p in self.config.ema_periods]
+                    if any(pd.isna(e) for e in emas):
+                        continue
+                    
+                    ema_spread = (max(emas) - min(emas)) / current_price
+                    if ema_spread >= self.config.broom_compression_threshold:
+                        continue
+                    
+                    # Base duration
+                    lookback = df.iloc[max(0, idx-200):idx]
+                    if len(lookback) < 200:
+                        continue
+                    
+                    peak_pos = df.index.get_loc(lookback['High'].idxmax())
+                    days_since_peak = idx - peak_pos
+                    
+                    if days_since_peak < self.config.base_duration_min or \
+                       days_since_peak > self.config.base_duration_max:
+                        continue
+                    
+                    # Box consolidation
+                    recent_20 = df.iloc[idx-19:idx+1]
+                    box_height = (recent_20['High'].max() - recent_20['Low'].min()) / current_price
+                    
+                    if box_height >= self.config.box_consolidation_height:
+                        continue
+                    
+                    # Volume
+                    volume_ma = df.iloc[max(0, idx-50):idx]['Volume'].mean()
+                    current_volume = df.iloc[idx]['Volume']
+                    
+                    if current_volume <= self.config.volume_threshold_multiplier * volume_ma:
+                        continue
+                    
+                    # Entry
+                    entry_price = current_price
+                    stop_loss = df.iloc[idx]['EMA_200'] * (1 - self.config.stop_loss_buffer)
+                    
+                    # Take profit
+                    base_depth = lookback['High'].max() - df.iloc[peak_pos:idx+1]['Low'].min()
+                    take_profit = entry_price + (self.config.measured_move_multiplier * base_depth)
+                    
+                    position = {
+                        'entry_date': date,
+                        'entry_price': entry_price,
+                        'stop_loss': stop_loss,
+                        'take_profit': take_profit,
+                        'highest_price': entry_price
+                    }
+                    
                 else:
-                    # Manage position
                     current_price = df.iloc[idx]['Close']
                     current_high = df.iloc[idx]['High']
                     current_low = df.iloc[idx]['Low']
                     days_held = (date - position['entry_date']).days
                     
-                    # Update highest price
                     if current_high > position['highest_price']:
                         position['highest_price'] = current_high
                     
-                    # Update stop with trailing
+                    # Trailing stop
                     ema_200 = df.iloc[idx]['EMA_200']
                     new_stop = ema_200 * (1 - self.config.stop_loss_buffer)
                     if new_stop > position['stop_loss']:
                         position['stop_loss'] = new_stop
                     
-                    # Check stop loss
-                    if current_low <= position['stop_loss']:
-                        exit_price = position['stop_loss']
+                    # Exit conditions
+                    if current_low <= position['stop_loss'] or \
+                       current_high >= position['take_profit'] or \
+                       days_held >= 90:
+                        
+                        if current_low <= position['stop_loss']:
+                            exit_price = position['stop_loss']
+                            exit_reason = 'stop_loss'
+                        elif current_high >= position['take_profit']:
+                            exit_price = position['take_profit']
+                            exit_reason = 'take_profit'
+                        else:
+                            exit_price = current_price
+                            exit_reason = 'time_exit'
+                        
                         return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
                         
                         trades.append({
                             'ticker': ticker,
-                            'entry_date': position['entry_date'],
-                            'exit_date': date,
-                            'entry_price': position['entry_price'],
-                            'exit_price': exit_price,
                             'return_pct': return_pct,
-                            'exit_reason': 'stop_loss',
+                            'exit_reason': exit_reason,
                             'days_held': days_held
                         })
                         
-                        logger.info(f"🛑 STOP: {ticker} | {return_pct:.2f}% | {days_held}d")
                         position = None
-                        continue
-                    
-                    # Check take profit
-                    if current_high >= position['take_profit']:
-                        exit_price = position['take_profit']
-                        return_pct = (exit_price - position['entry_price']) / position['entry_price'] * 100
-                        
-                        trades.append({
-                            'ticker': ticker,
-                            'entry_date': position['entry_date'],
-                            'exit_date': date,
-                            'entry_price': position['entry_price'],
-                            'exit_price': exit_price,
-                            'return_pct': return_pct,
-                            'exit_reason': 'take_profit',
-                            'days_held': days_held
-                        })
-                        
-                        logger.info(f"🎯 TARGET: {ticker} | {return_pct:.2f}% | {days_held}d")
-                        position = None
-            
-            # Close open position
-            if position is not None:
-                last_date = backtest_df.index[-1]
-                last_idx = df.index.get_loc(last_date)
-                last_price = df.iloc[last_idx]['Close']
-                return_pct = (last_price - position['entry_price']) / position['entry_price'] * 100
-                days_held = (last_date - position['entry_date']).days
-                
-                trades.append({
-                    'ticker': ticker,
-                    'entry_date': position['entry_date'],
-                    'exit_date': last_date,
-                    'entry_price': position['entry_price'],
-                    'exit_price': last_price,
-                    'return_pct': return_pct,
-                    'exit_reason': 'end_of_period',
-                    'days_held': days_held
-                })
             
             return trades
             
         except Exception as e:
-            logger.warning(f"Error in backtest for {ticker}: {e}")
             return trades
     
     def calculate_metrics(self, trades: List[Dict]) -> Dict:
         """Calculate metrics"""
         if not trades:
-            return {
-                'total_trades': 0, 'win_rate': 0, 'total_return': 0,
-                'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0
-            }
+            return {'total_trades': 0, 'win_rate': 0, 'total_return': 0,
+                    'avg_return': 0, 'profit_factor': 0}
         
-        try:
-            df = pd.DataFrame(trades)
-            
-            total_trades = len(df)
-            winners = df[df['return_pct'] > 0]
-            losers = df[df['return_pct'] < 0]
-            
-            win_rate = len(winners) / total_trades * 100
-            total_return = df['return_pct'].sum()
-            avg_return = df['return_pct'].mean()
-            
-            gross_profit = winners['return_pct'].sum() if len(winners) > 0 else 0
-            gross_loss = abs(losers['return_pct'].sum()) if len(losers) > 0 else 0
-            profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
-            
-            cumulative = 100
-            equity = [100]
-            for ret in df['return_pct']:
-                cumulative *= (1 + ret/100)
-                equity.append(cumulative)
-            
-            equity_series = pd.Series(equity)
-            drawdown = ((equity_series.cummax() - equity_series) / equity_series.cummax()).max() * 100
-            
-            avg_days = df['days_held'].mean()
-            
-            return {
-                'total_trades': total_trades,
-                'win_rate': win_rate,
-                'total_return': total_return,
-                'avg_return': avg_return,
-                'profit_factor': profit_factor,
-                'max_drawdown': drawdown,
-                'avg_days_held': avg_days
-            }
-        except Exception as e:
-            return {
-                'total_trades': 0, 'win_rate': 0, 'total_return': 0,
-                'avg_return': 0, 'profit_factor': 0, 'max_drawdown': 0,
-                'avg_days_held': 0
-            }
-    
-    def run_universe(self, tickers: List[str]) -> pd.DataFrame:
-        """Run backtest for universe"""
-        all_trades = []
-        stock_results = []
+        df = pd.DataFrame(trades)
+        total_trades = len(df)
+        winners = df[df['return_pct'] > 0]
+        losers = df[df['return_pct'] <= 0]
         
-        logger.info("=" * 80)
-        logger.info(f"ORIGINAL BACKTEST - {len(tickers)} STOCKS")
-        logger.info("=" * 80)
-        
-        for i, ticker in enumerate(tickers):
-            try:
-                logger.info(f"\n[{i+1}/{len(tickers)}] {ticker}")
-                
-                df = self.get_data(ticker)
-                
-                if df is None or len(df) < 300:
-                    logger.warning(f"  ✗ Insufficient data")
-                    continue
-                
-                trades = self.run_backtest(df, ticker)
-                
-                if trades:
-                    all_trades.extend(trades)
-                    metrics = self.calculate_metrics(trades)
-                    metrics['ticker'] = ticker
-                    metrics['processed'] = True
-                    stock_results.append(metrics)
-                    
-                    logger.info(f"  ✓ {metrics['total_trades']} trades | "
-                              f"Win: {metrics['win_rate']:.0f}% | "
-                              f"Return: {metrics['total_return']:.1f}%")
-                else:
-                    logger.info(f"  - No trades")
-                
-                del df, trades
-                gc.collect()
-                
-                time.sleep(self.config.request_delay)
-                
-            except Exception as e:
-                logger.error(f"  ✗ Error: {e}")
-        
-        # Summary
-        if all_trades:
-            overall = self.calculate_metrics(all_trades)
-            
-            logger.info("\n" + "=" * 80)
-            logger.info("OVERALL RESULTS")
-            logger.info(f"Total trades: {overall['total_trades']}")
-            logger.info(f"Win rate: {overall['win_rate']:.1f}%")
-            logger.info(f"Total return: {overall['total_return']:.1f}%")
-            logger.info(f"Profit factor: {overall['profit_factor']:.2f}")
-            logger.info("=" * 80)
-        
-        # Save results
-        results_df = pd.DataFrame(stock_results)
-        if results_df.empty:
-            results_df = pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return'])
-        
-        results_df.to_csv('nifty500_broom_breakout_results.csv', index=False)
-        logger.info(f"\nResults saved to nifty500_broom_breakout_results.csv")
-        
-        return results_df
+        return {
+            'total_trades': total_trades,
+            'win_rate': len(winners) / total_trades * 100,
+            'total_return': df['return_pct'].sum(),
+            'avg_return': df['return_pct'].mean(),
+            'profit_factor': winners['return_pct'].sum() / abs(losers['return_pct'].sum()) if len(losers) > 0 else float('inf')
+        }
 
-# ==================== UNIVERSE ====================
-
-def get_universe() -> List[str]:
-    """Original test universe"""
-    return [
-        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-        'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-        'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
-    ]
-
-# ==================== MAIN ====================
+# ==================== MAIN OPTIMIZATION LOOP ====================
 
 def main():
-    """Main execution"""
+    """Main optimization loop"""
     try:
         logger.info("=" * 80)
-        logger.info("ORIGINAL BROOM BREAKOUT STRATEGY")
-        logger.info("Restored Working Version")
+        logger.info("TIME-BOXED SELF-IMPROVING BROOM BREAKOUT")
+        logger.info(f"Runtime: {config.max_runtime_minutes} minutes")
         logger.info("=" * 80)
         
-        tickers = get_universe()
+        # Universe
+        tickers = [
+            'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+            'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
+            'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+            'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'WIPRO.NS', 'NESTLEIND.NS',
+            'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'BRITANNIA.NS', 'DABUR.NS',
+            'PIDILITIND.NS', 'HAVELLS.NS', 'ASTRAL.NS', 'DIXON.NS', 'TRENT.NS',
+            'TATAMOTORS.NS', 'M&M.NS', 'BAJAJ-AUTO.NS', 'EICHERMOT.NS', 'TVSMOTOR.NS',
+            'HCLTECH.NS', 'TECHM.NS', 'LTIM.NS', 'MPHASIS.NS', 'COFORGE.NS',
+        ]
         
-        engine = OriginalBroomBacktest(config)
+        # Initialize
+        data_fetcher = DataFetcher()
+        optimizer = OptimizationEngine(config)
+        backtest = FastBacktest(config, data_fetcher)
         
-        results = engine.run_universe(tickers)
+        # Preload all data
+        data_fetcher.preload_data(tickers, config.data_start)
         
-        logger.info("\n✅ BACKTEST COMPLETED")
+        logger.info(f"\n🚀 Starting optimization loop")
+        logger.info(f"Total stocks: {len(data_fetcher.data_pool)}")
         
-        return results
+        iteration = 0
+        
+        while config.should_continue():
+            iteration += 1
+            config.iterations_completed = iteration
+            
+            # Generate parameter combinations
+            param_combos = optimizer.generate_parameter_combinations()
+            
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🔄 ITERATION {iteration}")
+            logger.info(f"Time remaining: {config.time_remaining()/60:.1f} minutes")
+            logger.info(f"Testing {len(param_combos)} parameter combinations")
+            logger.info(f"{'='*60}")
+            
+            for combo_idx, params in enumerate(param_combos):
+                if not config.should_continue():
+                    break
+                
+                # Apply parameters
+                for key, value in params.items():
+                    setattr(config, key, value)
+                
+                logger.info(f"\n  Testing combo {combo_idx+1}: {params}")
+                
+                # Run backtest on all stocks
+                all_trades = []
+                
+                for ticker, df in data_fetcher.data_pool.items():
+                    trades = backtest.run_backtest_with_params(df, ticker)
+                    all_trades.extend(trades)
+                
+                # Calculate metrics
+                metrics = backtest.calculate_metrics(all_trades)
+                
+                # Evaluate
+                score = optimizer.evaluate_result(metrics, params)
+                
+                logger.info(f"  Trades: {metrics['total_trades']} | "
+                          f"Win: {metrics['win_rate']:.0f}% | "
+                          f"PF: {metrics['profit_factor']:.2f} | "
+                          f"Return: {metrics['total_return']:.1f}% | "
+                          f"Score: {score:.2f}")
+                
+                # Update best
+                optimizer.update_best(params, metrics, score)
+                
+                # Save history
+                optimizer.results_history.append({
+                    'iteration': iteration,
+                    'params': params,
+                    'metrics': metrics,
+                    'score': score,
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+                optimizer.save_iteration_history()
+                
+                # Cleanup
+                del all_trades
+                gc.collect()
+        
+        # Final summary
+        elapsed = time.time() - config.start_time
+        logger.info("\n" + "=" * 80)
+        logger.info("OPTIMIZATION COMPLETE")
+        logger.info(f"Total iterations: {config.iterations_completed}")
+        logger.info(f"Time elapsed: {elapsed/60:.1f} minutes")
+        logger.info(f"Best score: {config.best_score:.2f}")
+        logger.info(f"Best parameters:")
+        for key, value in config.best_params.items():
+            logger.info(f"  {key}: {value}")
+        logger.info("=" * 80)
+        
+        # Save final results
+        final_results = pd.DataFrame(optimizer.results_history)
+        if not final_results.empty:
+            final_results.to_csv('nifty500_broom_breakout_results.csv', index=False)
+            logger.info(f"\n✓ Results saved to nifty500_broom_breakout_results.csv")
+        
+        # Save best params summary
+        summary = {
+            'best_params': config.best_params,
+            'best_score': config.best_score,
+            'total_iterations': config.iterations_completed,
+            'runtime_minutes': elapsed/60,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        with open(config.optimization_dir / 'final_summary.json', 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        return final_results
         
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         logger.error(traceback.format_exc())
         
-        pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate', 'total_return']).to_csv(
+        pd.DataFrame(columns=['ticker', 'total_trades', 'win_rate']).to_csv(
             'nifty500_broom_breakout_results.csv', index=False
         )
         
