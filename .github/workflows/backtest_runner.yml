@@ -1,0 +1,43 @@
+name: Run Historical Backtest
+
+on:
+  workflow_dispatch:  # Allows manual triggering from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  run-backtest:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas numpy yfinance
+    
+    - name: Run Historical Backtest
+      run: python historical_backtest.py
+      
+    - name: Commit Backtest Results
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        git add -f backtest_trades.csv
+        git add -f monthly_profits.csv
+        
+        git commit -m "📈 Generated Historical Backtest Results" || echo "No changes to commit"
+        git pull origin main --rebase
+        git push origin main || echo "Push failed"
