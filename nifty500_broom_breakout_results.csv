@@ -1,2 +1,2 @@
-broom_compression_threshold,volume_threshold_multiplier,stop_loss_buffer,measured_move_multiplier
-0.06815900992403724,1.5,0.024157650000000006,1.2
+ticker,signal_date,entry_price,stop_loss,take_profit,risk,reward,risk_reward,compression,volume_ratio,rsi,action
+NOCIL.NS,2026-09-10,191.82,163.65,246.66,28.17,54.84,1.95,2.94,1.53,85.0,BUY
