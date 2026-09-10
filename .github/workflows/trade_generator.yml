@@ -50,6 +50,11 @@ jobs:
         git add -f index.html
         
         git commit -m "📊 Dashboard Update: $(date +'%Y-%m-%d %H:%M:%S')" || echo "No changes"
+        
+        # Sync with remote branch to grab the AI's latest parameter commits
+        git pull origin main --rebase
+        
+        # Now push the dashboard
         git push origin main || echo "Push failed"
       continue-on-error: true
     
