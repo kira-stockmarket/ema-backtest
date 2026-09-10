@@ -50,16 +50,16 @@ jobs:
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         
-        # Add generated files
-        git add -f nifty500_broom_breakout_results.csv
-        git add -f index.html
-        git add -f state/paper_portfolio.json
-        git add -f paper_trade_history.csv
+        # Add generated files (using || true so it doesn't crash if they don't exist yet)
+        git add -f nifty500_broom_breakout_results.csv || true
+        git add -f index.html || true
+        git add -f state/paper_portfolio.json || true
+        git add -f paper_trade_history.csv || true
         
         # Commit if there are changes
         git commit -m "📊 Dashboard & Portfolio Update: $(date +'%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
         
-        # Sync with remote branch to grab the AI's latest parameter commits and avoid collisions
+        # Sync with remote branch to grab the AI's latest parameter commits
         git pull origin main --rebase
         
         # Push all updates
