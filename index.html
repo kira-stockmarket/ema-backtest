@@ -1,143 +1,270 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Broom Breakout - Live Trading Dashboard</title>
-    
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .header { 
-            background: white; border-radius: 15px; padding: 30px;
-            margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        .header h1 { font-size: 2.5em; color: #333; margin-bottom: 10px; }
-        .header .subtitle { color: #666; font-size: 1.1em; }
-        .stats-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px; margin-bottom: 20px;
-        }
-        .stat-card {
-            background: white; border-radius: 15px; padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1); text-align: center;
-        }
-        .stat-card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
-        .stat-card .label { color: #666; margin-top: 5px; }
-        .signals-section {
-            background: white; border-radius: 15px; padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        .signals-section h2 { color: #333; margin-bottom: 20px; font-size: 1.8em; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #667eea; color: white; padding: 15px; text-align: left; font-weight: 600; }
-        td { padding: 12px 15px; border-bottom: 1px solid #eee; }
-        tr:hover { background: #f8f9fa; }
-        .buy-badge { 
-            background: #28a745; color: white; padding: 5px 15px;
-            border-radius: 20px; font-weight: bold;
-        }
-        .sell-badge { 
-            background: #dc3545; color: white; padding: 5px 15px;
-            border-radius: 20px; font-weight: bold;
-        }
-        .params-section {
-            background: white; border-radius: 15px; padding: 25px;
-            margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .params-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px; margin-top: 15px;
-        }
-        .param-item {
-            background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;
-        }
-        .param-item .param-value { font-size: 1.5em; font-weight: bold; color: #667eea; }
-        .param-item .param-label { color: #666; margin-top: 5px; font-size: 0.9em; }
-        .footer { text-align: center; color: white; margin-top: 20px; opacity: 0.8; }
-    </style>
-    
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🎯 Broom Breakout Strategy</h1>
-            <p class="subtitle">Live Trading Dashboard | Auto-Updated</p>
-            <p class="subtitle">Last Updated: 2026-09-10 10:41:37</p>
-            <p class="subtitle">Version: 7</p>
-        </div>
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Trade Scanner | Nifty 500</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+        <style>
+            /* Custom Dark Theme for DataTables */
+            .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter, 
+            .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_processing, 
+            .dataTables_wrapper .dataTables_paginate { color: #9ca3af; margin-bottom: 1rem; }
+            .dataTables_wrapper .dataTables_paginate .paginate_button { color: #9ca3af !important; }
+            table.dataTable tbody tr { background-color: transparent; }
+        </style>
+    </head>
+    <body class="bg-gray-900 text-gray-100 font-sans p-6 min-h-screen">
         
-        <div class="params-section">
-            <h2>🧠 Learned Parameters</h2>
-            <div class="params-grid">
-                <div class="param-item">
-                    <div class="param-value">0.085</div>
-                    <div class="param-label">Compression Threshold</div>
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="flex flex-col md:flex-row justify-between items-center border-b border-gray-700 pb-4 mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                        Nifty 500 AI Scanner
+                    </h1>
+                    <p class="text-gray-400 mt-1">Broom Breakout Strategy</p>
                 </div>
-                <div class="param-item">
-                    <div class="param-value">1.33x</div>
-                    <div class="param-label">Volume Multiplier</div>
-                </div>
-                <div class="param-item">
-                    <div class="param-value">0.015</div>
-                    <div class="param-label">Stop Loss Buffer</div>
-                </div>
-                <div class="param-item">
-                    <div class="param-value">1.69x</div>
-                    <div class="param-label">Measured Move</div>
+                <div class="text-right mt-4 md:mt-0">
+                    <p class="text-sm text-gray-400">Last Updated</p>
+                    <p class="font-mono text-emerald-400">2026-09-10 12:12:07 UTC</p>
                 </div>
             </div>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="value">13</div>
-                <div class="label">Active Signals</div>
+
+            <!-- Parameters Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">AI Version</p>
+                    <p class="text-2xl font-bold text-white">v7</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Max Compression</p>
+                    <p class="text-2xl font-bold text-blue-400">8.46%</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Min Volume</p>
+                    <p class="text-2xl font-bold text-purple-400">1.33x</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Target / Stop</p>
+                    <p class="text-xl font-bold text-emerald-400">1.69x <span class="text-gray-500">/</span> <span class="text-red-400">1.50%</span></p>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="value">13</div>
-                <div class="label">Buy Signals</div>
-            </div>
-            <div class="stat-card">
-                <div class="value">0</div>
-                <div class="label">Sell Signals</div>
-            </div>
-            <div class="stat-card">
-                <div class="value">8.56</div>
-                <div class="label">Avg Risk/Reward</div>
-            </div>
-        </div>
-        
-        <div class="signals-section">
-            <h2>📊 Live Trade Signals</h2>
-            <table>
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>Action</th>
-                <th>Entry Price</th>
-                <th>Stop Loss</th>
-                <th>Target</th>
-                <th>Risk</th>
-                <th>Reward</th>
-                <th>R:R</th>
-                <th>Volume</th>
-                <th>RSI</th>
+
+            <!-- Data Table -->
+            <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-lg p-6 overflow-x-auto">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    Active Trade Signals
+                </h2>
+                
+                <table id="signalsTable" class="w-full text-left text-sm whitespace-nowrap">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-900/50">
+                        <tr>
+                            <th class="p-3 rounded-tl-lg">Ticker</th>
+                            <th class="p-3">Date</th>
+                            <th class="p-3">Action</th>
+                            <th class="p-3">Entry</th>
+                            <th class="p-3">Stop Loss</th>
+                            <th class="p-3">Target</th>
+                            <th class="p-3">R:R</th>
+                            <th class="p-3">Compression</th>
+                            <th class="p-3">Vol Ratio</th>
+                            <th class="p-3 rounded-tr-lg">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">CHOLAFIN.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹1859.00</td>
+                <td class="p-3 text-red-400">₹1672.09</td>
+                <td class="p-3 text-green-400">₹2161.79</td>
+                <td class="p-3 font-mono">1.62</td>
+                <td class="p-3">8.19%</td>
+                <td class="p-3">2.01x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
             </tr>
-        </thead>
-        <tbody><tr><td><strong>CHOLAFIN.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹1,859.00</td><td>₹1,672.09</td><td>₹2,161.79</td><td>₹186.91</td><td>₹302.79</td><td><strong>1.62</strong></td><td>2.01x</td><td>43.7</td></tr><tr><td><strong>CUMMINSIND.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹5,155.00</td><td>₹4,968.83</td><td>₹7,074.95</td><td>₹186.17</td><td>₹1,919.95</td><td><strong>10.31</strong></td><td>1.77x</td><td>45.8</td></tr><tr><td><strong>PETRONET.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹288.70</td><td>₹275.95</td><td>₹442.72</td><td>₹12.75</td><td>₹154.02</td><td><strong>12.08</strong></td><td>1.33x</td><td>46.7</td></tr><tr><td><strong>CASTROLIND.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹188.06</td><td>₹184.35</td><td>₹242.70</td><td>₹3.71</td><td>₹54.64</td><td><strong>14.74</strong></td><td>2.12x</td><td>51.2</td></tr><tr><td><strong>CLEAN.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹848.45</td><td>₹821.17</td><td>₹1,374.53</td><td>₹27.28</td><td>₹526.08</td><td><strong>19.28</strong></td><td>2.37x</td><td>54.7</td></tr><tr><td><strong>INDOCO.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹254.25</td><td>₹228.97</td><td>₹353.72</td><td>₹25.28</td><td>₹99.47</td><td><strong>3.93</strong></td><td>7.83x</td><td>61.1</td></tr><tr><td><strong>JSL.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹762.15</td><td>₹729.65</td><td>₹1,154.18</td><td>₹32.50</td><td>₹392.03</td><td><strong>12.06</strong></td><td>1.59x</td><td>65.1</td></tr><tr><td><strong>MIDHANI.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹463.35</td><td>₹388.40</td><td>₹567.21</td><td>₹74.95</td><td>₹103.86</td><td><strong>1.39</strong></td><td>1.78x</td><td>68.5</td></tr><tr><td><strong>MRPL.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹181.32</td><td>₹160.96</td><td>₹298.36</td><td>₹20.36</td><td>₹117.04</td><td><strong>5.75</strong></td><td>1.84x</td><td>56.1</td></tr><tr><td><strong>NOCIL.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹195.31</td><td>₹165.22</td><td>₹272.62</td><td>₹30.09</td><td>₹77.31</td><td><strong>2.57</strong></td><td>7.04x</td><td>86.4</td></tr><tr><td><strong>OIL.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹500.30</td><td>₹446.11</td><td>₹714.96</td><td>₹54.19</td><td>₹214.66</td><td><strong>3.96</strong></td><td>1.42x</td><td>69.0</td></tr><tr><td><strong>PCBL.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹334.80</td><td>₹310.06</td><td>₹446.19</td><td>₹24.74</td><td>₹111.39</td><td><strong>4.50</strong></td><td>1.49x</td><td>67.1</td></tr><tr><td><strong>TIMKEN.NS</strong></td><td><span class="buy-badge">BUY</span></td><td>₹3,297.20</td><td>₹3,218.28</td><td>₹4,802.54</td><td>₹78.92</td><td>₹1,505.34</td><td><strong>19.07</strong></td><td>1.63x</td><td>63.0</td></tr></tbody></table>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">CUMMINSIND.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹5155.00</td>
+                <td class="p-3 text-red-400">₹4968.83</td>
+                <td class="p-3 text-green-400">₹7074.95</td>
+                <td class="p-3 font-mono">10.31</td>
+                <td class="p-3">5.26%</td>
+                <td class="p-3">1.77x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">PETRONET.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹288.70</td>
+                <td class="p-3 text-red-400">₹275.95</td>
+                <td class="p-3 text-green-400">₹442.72</td>
+                <td class="p-3 font-mono">12.08</td>
+                <td class="p-3">2.73%</td>
+                <td class="p-3">1.33x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">CASTROLIND.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹188.06</td>
+                <td class="p-3 text-red-400">₹184.35</td>
+                <td class="p-3 text-green-400">₹242.70</td>
+                <td class="p-3 font-mono">14.74</td>
+                <td class="p-3">0.81%</td>
+                <td class="p-3">2.12x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">CLEAN.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹848.45</td>
+                <td class="p-3 text-red-400">₹821.17</td>
+                <td class="p-3 text-green-400">₹1374.53</td>
+                <td class="p-3 font-mono">19.28</td>
+                <td class="p-3">4.21%</td>
+                <td class="p-3">2.37x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">INDOCO.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹254.25</td>
+                <td class="p-3 text-red-400">₹228.97</td>
+                <td class="p-3 text-green-400">₹353.72</td>
+                <td class="p-3 font-mono">3.93</td>
+                <td class="p-3">4.52%</td>
+                <td class="p-3">7.83x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">JSL.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹762.15</td>
+                <td class="p-3 text-red-400">₹729.65</td>
+                <td class="p-3 text-green-400">₹1154.18</td>
+                <td class="p-3 font-mono">12.06</td>
+                <td class="p-3">1.81%</td>
+                <td class="p-3">1.59x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">MIDHANI.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹463.35</td>
+                <td class="p-3 text-red-400">₹388.40</td>
+                <td class="p-3 text-green-400">₹567.21</td>
+                <td class="p-3 font-mono">1.39</td>
+                <td class="p-3">8.00%</td>
+                <td class="p-3">1.78x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">MRPL.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹181.32</td>
+                <td class="p-3 text-red-400">₹160.96</td>
+                <td class="p-3 text-green-400">₹298.36</td>
+                <td class="p-3 font-mono">5.75</td>
+                <td class="p-3">6.12%</td>
+                <td class="p-3">1.84x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">NOCIL.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹195.31</td>
+                <td class="p-3 text-red-400">₹165.22</td>
+                <td class="p-3 text-green-400">₹272.62</td>
+                <td class="p-3 font-mono">2.57</td>
+                <td class="p-3">3.04%</td>
+                <td class="p-3">7.04x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">OIL.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹500.30</td>
+                <td class="p-3 text-red-400">₹446.11</td>
+                <td class="p-3 text-green-400">₹714.96</td>
+                <td class="p-3 font-mono">3.96</td>
+                <td class="p-3">5.97%</td>
+                <td class="p-3">1.42x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">PCBL.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹334.80</td>
+                <td class="p-3 text-red-400">₹310.06</td>
+                <td class="p-3 text-green-400">₹446.19</td>
+                <td class="p-3 font-mono">4.50</td>
+                <td class="p-3">3.18%</td>
+                <td class="p-3">1.49x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+            <tr class="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                <td class="p-3 font-bold text-blue-400">TIMKEN.NS</td>
+                <td class="p-3">2026-09-10</td>
+                <td class="p-3 font-semibold text-green-400">BUY</td>
+                <td class="p-3">₹3297.20</td>
+                <td class="p-3 text-red-400">₹3218.28</td>
+                <td class="p-3 text-green-400">₹4802.54</td>
+                <td class="p-3 font-mono">19.07</td>
+                <td class="p-3">3.29%</td>
+                <td class="p-3">1.63x</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold bg-gray-700 text-white">N/A</span></td>
+            </tr>
+            
+                    </tbody>
+                </table>
+            </div>
         </div>
-        
-        <div class="footer">
-            <p>Auto-generated by Broom Breakout Strategy | GitHub Actions</p>
-            <p>⚠️ For educational purposes only. Not financial advice.</p>
-        </div>
-    </div>
-</body>
-</html>
+
+        <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <script>
+            $(document).ready(function() {
+                $('#signalsTable').DataTable({
+                    "order": [[ 1, "desc" ], [ 9, "desc" ]], // Sort by Date, then Confidence
+                    "pageLength": 25,
+                    "language": {
+                        "search": "Filter Tickers:",
+                        "lengthMenu": "Show _MENU_ signals"
+                    }
+                });
+            });
+        </script>
+    </body>
+    </html>
+    
