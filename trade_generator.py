@@ -46,6 +46,10 @@ EMA_PERIODS = [20, 50, 100, 200]
 
 # ==================== LOGGING ====================
 
+# Add these two lines right here!
+os.makedirs('logs', exist_ok=True)
+os.makedirs('state', exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
