@@ -1,6 +1,6 @@
 """
-UPDATED Trade Generator - Full Nifty 500 Universe
-Uses learned parameters to scan all 500 stocks and appends new signals.
+UPDATED Trade Generator - Full Nifty 500 Universe with ML Brain Integration
+Uses learned parameters and a Random Forest model to score setups.
 """
 
 import pandas as pd
@@ -37,16 +37,15 @@ def load_learned_params():
 
 learned_params, version = load_learned_params()
 
-COMPRESSION_THRESHOLD = learned_params.get('broom_compression_threshold', 0.08)
-VOLUME_MULTIPLIER = learned_params.get('volume_threshold_multiplier', 1.5)
+COMPRESSION_THRESHOLD = learned_params.get('broom_compression_threshold', 0.15)
+VOLUME_MULTIPLIER = learned_params.get('volume_threshold_multiplier', 1.2)
 STOP_LOSS_BUFFER = learned_params.get('stop_loss_buffer', 0.015)
-MEASURED_MOVE = learned_params.get('measured_move_multiplier', 2.0)
+MEASURED_MOVE = learned_params.get('measured_move_multiplier', 1.5)
 
 EMA_PERIODS = [20, 50, 100, 200]
 
 # ==================== LOGGING ====================
 
-# Add these two lines right here!
 os.makedirs('logs', exist_ok=True)
 os.makedirs('state', exist_ok=True)
 
@@ -230,7 +229,7 @@ class TradeGenerator:
         if volume_ratio < VOLUME_MULTIPLIER:
             return None
         
-        # Calculate levels
+        # Calculate levels & Structure
         entry_price = current_price
         stop_loss = ema_200 * (1 - STOP_LOSS_BUFFER)
         
@@ -243,6 +242,38 @@ class TradeGenerator:
         
         rsi = df.iloc[idx]['RSI']
         
+        # Calculate extra ML features
+        base_duration = idx - peak_idx
+        consolidation_height = base_depth / peak_price if peak_price > 0 else 0
+        trend_strength = (current_price - ema_200) / ema_200
+        
+        # --- NEW: MACHINE LEARNING CONFIDENCE SCORE ---
+        try:
+            import joblib
+            import os
+            
+            brain_path = 'state/ml_brain.pkl'
+            if os.path.exists(brain_path):
+                model = joblib.load(brain_path)
+                
+                # Extract the 5 exact features the AI learned on in correct order
+                features = [[
+                    compression, 
+                    volume_ratio, 
+                    base_duration, 
+                    consolidation_height, 
+                    trend_strength
+                ]]
+                
+                # Predict probability of a Win (Class 1)
+                win_probability = model.predict_proba(features)[0][1]
+                confidence = round(win_probability * 100, 1)
+            else:
+                confidence = 50.0 # Fallback if brain is missing
+        except Exception as e:
+            logger.debug(f"ML Scoring Error: {e}")
+            confidence = 50.0
+
         return {
             'ticker': ticker,
             'signal_date': datetime.now().strftime('%Y-%m-%d'),
@@ -255,6 +286,7 @@ class TradeGenerator:
             'compression': round(compression * 100, 2),
             'volume_ratio': round(volume_ratio, 2),
             'rsi': round(rsi, 1) if not pd.isna(rsi) else 0,
+            'confidence_pct': confidence,
             'action': 'BUY',
         }
     
@@ -281,7 +313,7 @@ class TradeGenerator:
                 
                 if signal:
                     self.signals.append(signal)
-                    logger.info(f"🎯 SIGNAL: {ticker}")
+                    logger.info(f"🎯 SIGNAL: {ticker} | ML Probability: {signal['confidence_pct']}%")
                 
                 processed += 1
                 
