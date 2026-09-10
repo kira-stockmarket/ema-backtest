@@ -1,6 +1,6 @@
 """
-FIXED: 5.8-Hour Continuous Learning Loop with True "Apples-to-Apples" Evaluation.
-Runs continuously, optimizes parameters by proving they beat the baseline, and commits periodically.
+7-Dimension Continuous Learning Loop (Indian Market Optimizer)
+Optimizes EMA, Volume, SL, TP, and new Structural Base parameters via Head-to-Head combat.
 """
 
 import pandas as pd
@@ -11,39 +11,36 @@ import logging
 import os
 import sys
 from datetime import datetime
-import requests
-from pathlib import Path
 import json
 import subprocess
 import random
+from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
-# ==================== CONFIGURATION ====================
-
 class Config:
     def __init__(self):
-        # 5.8 hours = 20880 seconds
         self.loop_duration_seconds = int(os.getenv('LOOP_DURATION', '20880'))  
         self.start_time = time.time()
-        
-        self.data_start = '2015-01-01' # Fetch enough data for robust random slices
+        self.data_start = '2015-01-01' 
         self.ema_periods = [20, 50, 100, 200]
         
         self.data_dir = Path('data_cache')
         self.state_dir = Path('state')
-        self.logs_dir = Path('logs')
-        
-        for dir_path in [self.data_dir, self.state_dir, self.logs_dir]:
+        for dir_path in [self.data_dir, self.state_dir]:
             dir_path.mkdir(exist_ok=True)
             
         self.load_state()
         
+        # New 7-Dimension Bounds for Indian Markets
         self.parameter_bounds = {
-            'broom_compression_threshold': (0.03, 0.15),
-            'volume_threshold_multiplier': (1.2, 3.5),
-            'stop_loss_buffer': (0.008, 0.05),
-            'measured_move_multiplier': (1.2, 5.0),
+            'broom_compression_threshold': (0.05, 0.20),
+            'volume_threshold_multiplier': (1.0, 3.0),
+            'stop_loss_buffer': (0.005, 0.05),
+            'measured_move_multiplier': (1.0, 5.0),
+            'base_duration_min': (20, 100),       # Int days
+            'base_duration_max': (100, 300),      # Int days
+            'box_consolidation_height': (0.10, 0.50)
         }
     
     def load_state(self):
@@ -58,22 +55,24 @@ class Config:
                 self.learned_params = self.get_default_params()
                 self.version = 0
             
-            # Apply params
-            self.broom_compression_threshold = self.learned_params.get('broom_compression_threshold', 0.08)
-            self.volume_threshold_multiplier = self.learned_params.get('volume_threshold_multiplier', 1.5)
-            self.stop_loss_buffer = self.learned_params.get('stop_loss_buffer', 0.015)
-            self.measured_move_multiplier = self.learned_params.get('measured_move_multiplier', 2.0)
-            
+            # Apply params dynamically
+            for k, v in self.learned_params.items():
+                setattr(self, k, v)
+                
         except Exception:
             self.learned_params = self.get_default_params()
             self.version = 0
 
     def get_default_params(self):
+        # Starting with your high-CAGR baseline
         return {
-            'broom_compression_threshold': 0.08,
-            'volume_threshold_multiplier': 1.5,
-            'stop_loss_buffer': 0.015,
-            'measured_move_multiplier': 2.0,
+            'broom_compression_threshold': 0.15,
+            'base_duration_min': 63,
+            'base_duration_max': 200,
+            'box_consolidation_height': 0.25,
+            'volume_threshold_multiplier': 1.2,
+            'stop_loss_buffer': 0.01,
+            'measured_move_multiplier': 1.5
         }
     
     def save_state(self, metrics):
@@ -93,15 +92,9 @@ class Config:
     def time_remaining(self):
         return max(0, self.loop_duration_seconds - (time.time() - self.start_time))
 
-# ==================== LOGGING ====================
-def setup_logging(config):
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-    return logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-config = Config()
-logger = setup_logging(config)
-
-# ==================== CORE LOGIC ====================
 class DataFetcher:
     def fetch_data(self, ticker, start_date):
         try:
@@ -114,21 +107,25 @@ class DataFetcher:
         return None
 
 def backtest_and_learn(data_pool, config):
-    """Simulates trades on a fixed subset, comparing NEW vs OLD parameters (Apples-to-Apples)"""
-    
-    # 1. Mutate parameters slightly
     param_keys = list(config.learned_params.keys())
     key_to_mutate = random.choice(param_keys)
     bounds = config.parameter_bounds[key_to_mutate]
     
     original_val = config.learned_params[key_to_mutate]
-    mutation = random.uniform(-0.05, 0.05) * original_val
-    test_val = max(bounds[0], min(bounds[1], original_val + mutation))
+    mutation_pct = random.uniform(-0.10, 0.10) # 10% swing for exploration
     
-    # Generate a random seed for this specific iteration slice
+    if key_to_mutate in ['base_duration_min', 'base_duration_max']:
+        # Integer mutation logic
+        test_val = int(round(original_val * (1 + mutation_pct)))
+        if test_val == original_val:
+            test_val += random.choice([-1, 1])
+        test_val = max(bounds[0], min(bounds[1], test_val))
+    else:
+        # Float mutation logic
+        test_val = max(bounds[0], min(bounds[1], original_val + (mutation_pct * original_val)))
+    
     slice_seed = random.randint(1, 1000000)
     
-    # Helper function to run the strategy on a specific set of parameters
     def evaluate_strategy(test_config_value):
         trades = []
         setattr(config, key_to_mutate, test_config_value)
@@ -140,37 +137,63 @@ def backtest_and_learn(data_pool, config):
             
             if len(df) < 500: continue
             
-            # Use the slice_seed so OLD and NEW are tested on the exact same days
             random.seed(slice_seed) 
-            start_idx = random.randint(250, len(df) - 100)
+            start_idx = random.randint(300, len(df) - 100)
             
-            for idx in range(start_idx, start_idx + 60):
+            for idx in range(start_idx, start_idx + 80):
                 current_price = df.iloc[idx]['Close']
+                ema_200 = df.iloc[idx]['EMA_200']
+                
+                if current_price <= ema_200: continue
+                
                 emas = [df.iloc[idx][f'EMA_{p}'] for p in config.ema_periods]
                 compression = (max(emas) - min(emas)) / current_price
-                
                 if compression >= config.broom_compression_threshold: continue
                 
                 volume_ma = df.iloc[idx]['Volume_MA_50']
                 if volume_ma <= 0: continue
                 volume_ratio = df.iloc[idx]['Volume'] / volume_ma
-                
                 if volume_ratio < config.volume_threshold_multiplier: continue
                 
-                future_data = df.iloc[idx+1:idx+20]
+                # --- NEW STRUCTURAL FILTERS ---
+                lookback = df['High'].iloc[max(0, idx - config.base_duration_max):idx]
+                if lookback.empty: continue
+                
+                peak_price = lookback.max()
+                peak_date = lookback.idxmax()
+                peak_idx = df.index.get_loc(peak_date)
+                
+                base_duration = idx - peak_idx
+                if not (config.base_duration_min <= base_duration <= config.base_duration_max):
+                    continue
+                
+                base_low = df['Low'].iloc[peak_idx:idx+1].min()
+                base_depth = peak_price - base_low
+                if (base_depth / peak_price) > config.box_consolidation_height:
+                    continue
+                
+                # Setup passed, simulate trade forward 40 days max
+                future_data = df.iloc[idx+1:idx+41]
                 if not future_data.empty:
-                    return_pct = (future_data['Close'].iloc[-1] - current_price) / current_price * 100
-                    trades.append(return_pct)
+                    tp = current_price + (config.measured_move_multiplier * base_depth)
+                    sl = ema_200 * (1 - config.stop_loss_buffer)
+                    
+                    for f_idx, row in future_data.iterrows():
+                        if row['High'] >= tp:
+                            trades.append(((tp / current_price) - 1) * 100)
+                            break
+                        elif row['Low'] <= sl:
+                            trades.append(((sl / current_price) - 1) * 100)
+                            break
+                    else:
+                        # Trade didn't close in 40 days, log current PnL
+                        trades.append(((future_data.iloc[-1]['Close'] / current_price) - 1) * 100)
         return trades
 
-    # 2. Run Apples-to-Apples Comparison
     old_trades = evaluate_strategy(original_val)
     new_trades = evaluate_strategy(test_val)
-    
-    # Reset random seed back to system time for future iterations
     random.seed()
 
-    # 3. Calculate Win Rates
     def calc_win_rate(trades_list):
         if not trades_list: return 0
         return len([t for t in trades_list if t > 0]) / len(trades_list) * 100
@@ -178,26 +201,22 @@ def backtest_and_learn(data_pool, config):
     old_win_rate = calc_win_rate(old_trades)
     new_win_rate = calc_win_rate(new_trades)
     
-    # 4. STRICT EVALUATION: Does the mutation actually beat the baseline?
-    if new_win_rate > old_win_rate and len(new_trades) >= 10:
-        # It genuinely improved! Keep it.
+    if new_win_rate > old_win_rate and len(new_trades) >= 5:
         config.learned_params[key_to_mutate] = test_val
         setattr(config, key_to_mutate, test_val)
-        logger.info(f"🏆 GENUINE UPGRADE! Old WR: {old_win_rate:.1f}% ({len(old_trades)} trades) -> New WR: {new_win_rate:.1f}% ({len(new_trades)} trades). Kept {key_to_mutate}: {test_val:.4f}")
+        logger.info(f"🏆 UPGRADE! Old WR: {old_win_rate:.1f}% ({len(old_trades)} tr) -> New WR: {new_win_rate:.1f}% ({len(new_trades)} tr). Kept {key_to_mutate}: {test_val}")
     else:
-        # Failed to beat the baseline, or not enough trades. Revert it.
         config.learned_params[key_to_mutate] = original_val
         setattr(config, key_to_mutate, original_val)
 
-# ==================== MAIN LOOP ====================
 def main():
-    logger.info(f"STARTING 5.8 HOUR TRUE LEARNING LOOP - v{config.version}")
+    logger.info(f"STARTING 7-DIMENSION OPTIMIZER LOOP - v{config.version}")
     
-    # Expand universe slightly to ensure we generate enough trades per slice
     tickers = [
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
         'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+        'TATAMOTORS.NS', 'M&M.NS', 'SUNPHARMA.NS', 'TATASTEEL.NS', 'NTPC.NS' # Added 5 more for better sample sizes
     ]
     
     data_pool = {}
@@ -206,7 +225,7 @@ def main():
         df = fetcher.fetch_data(ticker, config.data_start)
         if df is not None: data_pool[ticker] = df
     
-    logger.info(f"Loaded {len(data_pool)} stocks into memory. Beginning mutations...")
+    logger.info(f"Loaded {len(data_pool)} stocks. Beginning mutations...")
     
     last_commit_time = time.time()
     iterations = 0
@@ -215,7 +234,6 @@ def main():
         backtest_and_learn(data_pool, config)
         iterations += 1
         
-        # Commit every 30 minutes
         if time.time() - last_commit_time > 1800:
             config.save_state({'iterations': iterations})
             try:
@@ -223,24 +241,19 @@ def main():
                 subprocess.run(['git', 'config', '--local', 'user.name', 'GitHub Action'], check=False)
                 subprocess.run(['git', 'add', '-f', 'state/current_params.json'], check=False)
                 subprocess.run(['git', 'commit', '-m', f'Auto-learn upgrade v{config.version}'], check=False)
-                subprocess.run(['git', 'push'], check=False)
-                logger.info("Intermediate state pushed to GitHub.")
+                subprocess.run(['git', 'push', 'origin', 'main'], check=False)
                 last_commit_time = time.time()
-            except Exception as e:
-                logger.warning(f"Commit failed: {e}")
-                
-        # Sleep briefly to prevent maxing out CPU needlessly
+            except Exception:
+                pass
         time.sleep(1)
         
-    # Final save and commit
     config.save_state({'iterations': iterations})
     try:
         subprocess.run(['git', 'add', '-f', 'state/current_params.json'], check=False)
         subprocess.run(['git', 'commit', '-m', f'Final loop update v{config.version}'], check=False)
-        subprocess.run(['git', 'push'], check=False)
+        subprocess.run(['git', 'push', 'origin', 'main'], check=False)
     except:
         pass
-    logger.info("LOOP COMPLETE.")
 
 if __name__ == "__main__":
     main()
