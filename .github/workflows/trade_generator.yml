@@ -1,9 +1,9 @@
-name: Live Trade Generator & Dashboard
+name: Live Trade Generator & Paper Trader
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Allows you to trigger it manually
   schedule:
-    - cron: '*/15 * * * *' # Runs every 15 minutes
+    - cron: '*/15 * * * *'  # Runs every 15 minutes automatically
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 1
+        fetch-depth: 0  # Fetch all history so rebasing works smoothly
     
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -40,21 +40,29 @@ jobs:
     - name: Generate dashboard
       run: python dashboard_generator.py
       continue-on-error: true
+      
+    - name: Run Paper Trading Terminal
+      run: python paper_trader.py
+      continue-on-error: true
     
-    - name: Commit Dashboard Updates
+    - name: Commit Data & Dashboard Updates
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         
+        # Add generated files
         git add -f nifty500_broom_breakout_results.csv
         git add -f index.html
+        git add -f state/paper_portfolio.json
+        git add -f paper_trade_history.csv
         
-        git commit -m "📊 Dashboard Update: $(date +'%Y-%m-%d %H:%M:%S')" || echo "No changes"
+        # Commit if there are changes
+        git commit -m "📊 Dashboard & Portfolio Update: $(date +'%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
         
-        # Sync with remote branch to grab the AI's latest parameter commits
+        # Sync with remote branch to grab the AI's latest parameter commits and avoid collisions
         git pull origin main --rebase
         
-        # Now push the dashboard
+        # Push all updates
         git push origin main || echo "Push failed"
       continue-on-error: true
     
@@ -66,4 +74,5 @@ jobs:
         publish_branch: gh-pages
         enable_jekyll: false
         force_orphan: true
+        exclude_assets: '.github,logs,data_cache,results'
       continue-on-error: true
