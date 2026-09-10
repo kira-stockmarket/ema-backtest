@@ -1,5 +1,125 @@
 [
   {
+    "ticker": "TITAN.NS",
+    "return_pct": 5.0922534077172665,
+    "compression": 0.06911064623982023,
+    "volume_ratio": 1.7048101509159046
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": 9.424505530884463,
+    "compression": 0.06237700103544866,
+    "volume_ratio": 1.6468977438823431
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": 4.737371866697271,
+    "compression": 0.058735460549908636,
+    "volume_ratio": 1.7218826631374606
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": 0.7324391074392368,
+    "compression": 0.05713931490726264,
+    "volume_ratio": 1.740782937166748
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": -2.090148076655537,
+    "compression": 0.060620648252587936,
+    "volume_ratio": 3.6747086751108817
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": 24.37115319286864,
+    "compression": 0.05386965194888828,
+    "volume_ratio": 1.5459305159723908
+  },
+  {
+    "ticker": "TITAN.NS",
+    "return_pct": 8.705090736400887,
+    "compression": 0.06416384004071088,
+    "volume_ratio": 3.0392180816289547
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -14.185369180774412,
+    "compression": 0.05389913473382097,
+    "volume_ratio": 1.821313122925966
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -13.819279755359828,
+    "compression": 0.056601037577911135,
+    "volume_ratio": 1.7668660790991206
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -13.79765637894042,
+    "compression": 0.05922781568250023,
+    "volume_ratio": 1.7859357354876177
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -9.442795729054932,
+    "compression": 0.060783971214053885,
+    "volume_ratio": 3.2582015206420696
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -4.570925690406977,
+    "compression": 0.05986187795039705,
+    "volume_ratio": 1.5905482069035826
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -1.4477172837595789,
+    "compression": 0.04090162434619714,
+    "volume_ratio": 1.5199270042115145
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -6.460027680548881,
+    "compression": 0.01594091284146642,
+    "volume_ratio": 2.5645404001974
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -7.8215177511867084,
+    "compression": 0.03288685590204399,
+    "volume_ratio": 2.129715516899761
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": 1.9438288050505976,
+    "compression": 0.041794798195995055,
+    "volume_ratio": 1.565588522397716
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -3.813869711868324,
+    "compression": 0.03464436717601823,
+    "volume_ratio": 2.311907024896408
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -5.439098108348,
+    "compression": 0.025465992729437645,
+    "volume_ratio": 1.9568349534764287
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -6.903591963694207,
+    "compression": 0.022578821745426938,
+    "volume_ratio": 2.4193909379177088
+  },
+  {
+    "ticker": "ULTRACEMCO.NS",
+    "return_pct": -5.446811551347632,
+    "compression": 0.021356396146960367,
+    "volume_ratio": 2.4894916375056413
+  },
+  {
     "ticker": "ULTRACEMCO.NS",
     "return_pct": 1.4779512837468158,
     "compression": 0.01555241925484736,
@@ -46,12 +166,6 @@
     "return_pct": 5.969896465457227,
     "compression": 0.07011494977136926,
     "volume_ratio": 1.9317131495780344
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": 8.257646501107994,
-    "compression": 0.07044655013895047,
-    "volume_ratio": 1.7331652834448084
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -127,12 +241,6 @@
   },
   {
     "ticker": "ULTRACEMCO.NS",
-    "return_pct": 15.037460963711677,
-    "compression": 0.07239615056040459,
-    "volume_ratio": 2.350113677005371
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
     "return_pct": -7.076864515607628,
     "compression": 0.02227394001567242,
     "volume_ratio": 1.8326384434620244
@@ -184,12 +292,6 @@
     "return_pct": 30.071910984839196,
     "compression": 0.06799230802583224,
     "volume_ratio": 2.0804718627735266
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": 24.581965047979104,
-    "compression": 0.07064728795298787,
-    "volume_ratio": 1.9317162262994294
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -457,12 +559,6 @@
   },
   {
     "ticker": "ULTRACEMCO.NS",
-    "return_pct": 18.153454416323708,
-    "compression": 0.07228730202742212,
-    "volume_ratio": 2.977608496066606
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
     "return_pct": -11.005633425378207,
     "compression": 0.056206360407918286,
     "volume_ratio": 1.898765309265183
@@ -538,12 +634,6 @@
     "return_pct": -4.6364113665412034,
     "compression": 0.05603650498876389,
     "volume_ratio": 1.8780977894654474
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": 1.7038122463255423,
-    "compression": 0.07080120264781259,
-    "volume_ratio": 5.882089782108606
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -661,12 +751,6 @@
   },
   {
     "ticker": "ULTRACEMCO.NS",
-    "return_pct": 4.337337048797166,
-    "compression": 0.0723272713852175,
-    "volume_ratio": 3.559635507681929
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
     "return_pct": 5.24618761717202,
     "compression": 0.06644215573292431,
     "volume_ratio": 1.7156460030340388
@@ -676,12 +760,6 @@
     "return_pct": 5.258341809342198,
     "compression": 0.06731809350917663,
     "volume_ratio": 2.1681732496676105
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": 21.251529812356807,
-    "compression": 0.07166396818289697,
-    "volume_ratio": 1.7795785218102012
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -706,12 +784,6 @@
     "return_pct": 19.812806771347642,
     "compression": 0.05384620097077218,
     "volume_ratio": 1.8903082107162086
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": 10.289153552953458,
-    "compression": 0.07076246786096378,
-    "volume_ratio": 3.211364162040139
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -760,12 +832,6 @@
     "return_pct": 6.966402912481237,
     "compression": 0.06827412766381871,
     "volume_ratio": 1.751324948930781
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": -1.7454740903751158,
-    "compression": 0.07214857712371225,
-    "volume_ratio": 2.596906872655336
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -898,12 +964,6 @@
     "return_pct": -2.1149717738729428,
     "compression": 0.06956061355024873,
     "volume_ratio": 1.8476722446657634
-  },
-  {
-    "ticker": "ULTRACEMCO.NS",
-    "return_pct": -0.7548988114359139,
-    "compression": 0.07065862308953087,
-    "volume_ratio": 1.8928886198947465
   },
   {
     "ticker": "ULTRACEMCO.NS",
@@ -1081,7 +1141,7 @@
   },
   {
     "ticker": "ULTRACEMCO.NS",
-    "return_pct": -8.971390772283778,
+    "return_pct": -9.872664130974036,
     "compression": 0.013541942414918719,
     "volume_ratio": 2.6439105283671447
   },
@@ -1312,12 +1372,6 @@
     "return_pct": 12.015368055703975,
     "compression": 0.06822463146495873,
     "volume_ratio": 1.508866774121777
-  },
-  {
-    "ticker": "WIPRO.NS",
-    "return_pct": 11.145844847532233,
-    "compression": 0.07127678640463726,
-    "volume_ratio": 2.1719616127073866
   },
   {
     "ticker": "WIPRO.NS",
@@ -1753,30 +1807,6 @@
   },
   {
     "ticker": "WIPRO.NS",
-    "return_pct": 11.914282515411212,
-    "compression": 0.07217666198222596,
-    "volume_ratio": 2.122235061350513
-  },
-  {
-    "ticker": "WIPRO.NS",
-    "return_pct": 10.392437296838061,
-    "compression": 0.07202775807992008,
-    "volume_ratio": 1.6522143639330544
-  },
-  {
-    "ticker": "WIPRO.NS",
-    "return_pct": 6.752936506753415,
-    "compression": 0.07108404538010293,
-    "volume_ratio": 4.746112046161128
-  },
-  {
-    "ticker": "WIPRO.NS",
-    "return_pct": 6.78708517862333,
-    "compression": 0.0724987028156708,
-    "volume_ratio": 1.5030611582562659
-  },
-  {
-    "ticker": "WIPRO.NS",
     "return_pct": 0.4842977065513611,
     "compression": 0.042989515115803845,
     "volume_ratio": 1.7508920071447547
@@ -2089,12 +2119,6 @@
   },
   {
     "ticker": "NESTLEIND.NS",
-    "return_pct": 10.93105382599195,
-    "compression": 0.07086841067962492,
-    "volume_ratio": 1.6722078399936924
-  },
-  {
-    "ticker": "NESTLEIND.NS",
     "return_pct": 25.0785450863282,
     "compression": 0.06081622838011474,
     "volume_ratio": 2.025228904551742
@@ -2104,12 +2128,6 @@
     "return_pct": 17.636098688323994,
     "compression": 0.06399559955150547,
     "volume_ratio": 2.0216969709585317
-  },
-  {
-    "ticker": "NESTLEIND.NS",
-    "return_pct": 12.978692532107171,
-    "compression": 0.07141974402205961,
-    "volume_ratio": 4.467303006085216
   },
   {
     "ticker": "NESTLEIND.NS",
@@ -2599,12 +2617,6 @@
   },
   {
     "ticker": "NESTLEIND.NS",
-    "return_pct": 1.5762482318949067,
-    "compression": 0.0709129484088394,
-    "volume_ratio": 1.5930319394151156
-  },
-  {
-    "ticker": "NESTLEIND.NS",
     "return_pct": 3.730830999032425,
     "compression": 0.06940173516047615,
     "volume_ratio": 1.660483955096185
@@ -2614,18 +2626,6 @@
     "return_pct": -2.423896183347693,
     "compression": 0.06913919764260572,
     "volume_ratio": 1.6877314001164043
-  },
-  {
-    "ticker": "NESTLEIND.NS",
-    "return_pct": -1.7673552800757446,
-    "compression": 0.07062277117978563,
-    "volume_ratio": 2.0442126485523793
-  },
-  {
-    "ticker": "NESTLEIND.NS",
-    "return_pct": 1.2018989769089268,
-    "compression": 0.07126849888640995,
-    "volume_ratio": 1.9838945151249066
   },
   {
     "ticker": "NESTLEIND.NS",
