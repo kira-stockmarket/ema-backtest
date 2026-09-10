@@ -1,21 +1,13 @@
 {
   "params": {
-    "broom_compression_threshold": 0.06815900992403724,
-    "volume_threshold_multiplier": 1.5,
-    "stop_loss_buffer": 0.024157650000000006,
-    "measured_move_multiplier": 1.2
+    "broom_compression_threshold": 0.08461703521767071,
+    "volume_threshold_multiplier": 1.3256960839298473,
+    "stop_loss_buffer": 0.015005369036719899,
+    "measured_move_multiplier": 1.6915860077461253
   },
-  "version": 6,
-  "updated_at": "2026-09-10T04:52:19.569259",
-  "total_trades": 3315,
+  "version": 7,
+  "updated_at": "2026-09-10T09:31:16.116170",
   "last_metrics": {
-    "new_trades": 2815,
-    "total_trades": 3315,
-    "params": {
-      "broom_compression_threshold": 0.06815900992403724,
-      "volume_threshold_multiplier": 1.5,
-      "stop_loss_buffer": 0.024157650000000006,
-      "measured_move_multiplier": 1.2
-    }
+    "iterations": 873
   }
 }
