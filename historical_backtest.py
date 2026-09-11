@@ -25,7 +25,7 @@ PARAMS = {
 
 INITIAL_CAPITAL = 100000.0
 POSITION_SIZE_PCT = 0.10  # Deploy 10% of equity per trade
-MAX_POSITIONS = 2000
+MAX_POSITIONS = 10
 CSV_FILENAME = "Backtest Stage 2 weekly.csv"
 
 def backtest():
