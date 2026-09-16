@@ -62,7 +62,7 @@
     "HINDCOPPER.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 532.3,
-        "current_price": 492.1,
+        "current_price": 490.24,
         "highest_price": 532.3,
         "initial_stop": 482.39,
         "trailing_stop": 482.39,
@@ -237,6 +237,16 @@
         "initial_stop": 524.98,
         "trailing_stop": 524.98,
         "take_profit": 714.99,
+        "confidence": 50.0
+    },
+    "INDHOTEL.NS": {
+        "entry_date": "2026-09-16",
+        "entry_price": 715.0,
+        "current_price": 715.0,
+        "highest_price": 715.0,
+        "initial_stop": 696.39,
+        "trailing_stop": 696.39,
+        "take_profit": 809.48,
         "confidence": 50.0
     }
 }
