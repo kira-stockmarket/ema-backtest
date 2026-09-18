@@ -448,5 +448,25 @@
         "trailing_stop": 669.56,
         "take_profit": 949.58,
         "confidence": 50.0
+    },
+    "ALKEM.NS": {
+        "entry_date": "2026-09-18",
+        "entry_price": 5466.5,
+        "current_price": 5466.5,
+        "highest_price": 5466.5,
+        "initial_stop": 5382.67,
+        "trailing_stop": 5382.67,
+        "take_profit": 6959.32,
+        "confidence": 50.0
+    },
+    "MARICO.NS": {
+        "entry_date": "2026-09-18",
+        "entry_price": 803.9,
+        "current_price": 803.9,
+        "highest_price": 803.9000244140625,
+        "initial_stop": 789.87,
+        "trailing_stop": 791.84,
+        "take_profit": 969.42,
+        "confidence": 50.0
     }
 }
