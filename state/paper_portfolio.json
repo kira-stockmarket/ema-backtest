@@ -82,7 +82,7 @@
     "MANINFRA.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 128.72,
-        "current_price": 126.0,
+        "current_price": 125.64,
         "highest_price": 128.72,
         "initial_stop": 114.33,
         "trailing_stop": 114.33,
@@ -102,7 +102,7 @@
     "RATNAMANI.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 2859.2,
-        "current_price": 2864.9,
+        "current_price": 2859.1,
         "highest_price": 2864.89990234375,
         "initial_stop": 2429.51,
         "trailing_stop": 2821.91,
@@ -212,7 +212,7 @@
     "SUPRAJIT.NS": {
         "entry_date": "2026-09-16",
         "entry_price": 489.85,
-        "current_price": 501.5,
+        "current_price": 499.05,
         "highest_price": 501.5,
         "initial_stop": 460.26,
         "trailing_stop": 493.97,
@@ -222,7 +222,7 @@
     "FSL.NS": {
         "entry_date": "2026-09-16",
         "entry_price": 283.35,
-        "current_price": 272.0,
+        "current_price": 273.45,
         "highest_price": 283.35,
         "initial_stop": 271.42,
         "trailing_stop": 271.42,
@@ -342,7 +342,7 @@
     "HONAUT.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 35445.0,
-        "current_price": 35260.0,
+        "current_price": 35445.0,
         "highest_price": 35445.0,
         "initial_stop": 34651.13,
         "trailing_stop": 34651.13,
@@ -402,7 +402,7 @@
     "CARBORUNIV.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1124.4,
-        "current_price": 1117.0,
+        "current_price": 1124.4,
         "highest_price": 1124.4000244140625,
         "initial_stop": 998.41,
         "trailing_stop": 1107.53,
