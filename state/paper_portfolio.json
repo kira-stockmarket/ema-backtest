@@ -418,5 +418,45 @@
         "trailing_stop": 1937.29,
         "take_profit": 3051.78,
         "confidence": 50.0
+    },
+    "ADANIGREEN.NS": {
+        "entry_date": "2026-09-21",
+        "entry_price": 1334.5,
+        "current_price": 1303.6,
+        "highest_price": 1334.5,
+        "initial_stop": 1241.42,
+        "trailing_stop": 1241.42,
+        "take_profit": 2039.21,
+        "confidence": 50.0
+    },
+    "PETRONET.NS": {
+        "entry_date": "2026-09-21",
+        "entry_price": 292.6,
+        "current_price": 287.5,
+        "highest_price": 292.6,
+        "initial_stop": 276.38,
+        "trailing_stop": 276.38,
+        "take_profit": 446.62,
+        "confidence": 50.0
+    },
+    "ABBOTINDIA.NS": {
+        "entry_date": "2026-09-21",
+        "entry_price": 27270.0,
+        "current_price": 26960.0,
+        "highest_price": 27270.0,
+        "initial_stop": 26794.55,
+        "trailing_stop": 26794.55,
+        "take_profit": 35499.57,
+        "confidence": 50.0
+    },
+    "CASTROLIND.NS": {
+        "entry_date": "2026-09-21",
+        "entry_price": 197.14,
+        "current_price": 193.5,
+        "highest_price": 197.14,
+        "initial_stop": 184.84,
+        "trailing_stop": 184.84,
+        "take_profit": 251.78,
+        "confidence": 50.0
     }
 }
