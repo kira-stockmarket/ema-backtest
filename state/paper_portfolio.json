@@ -2,7 +2,7 @@
     "CHOLAFIN.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 1859.0,
-        "current_price": 1770.2,
+        "current_price": 1774.0,
         "highest_price": 1859.0,
         "initial_stop": 1672.09,
         "trailing_stop": 1672.09,
@@ -12,7 +12,7 @@
     "NOCIL.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 195.31,
-        "current_price": 209.16,
+        "current_price": 206.3,
         "highest_price": 209.16000366210938,
         "initial_stop": 165.22,
         "trailing_stop": 206.02,
@@ -22,7 +22,7 @@
     "OIL.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 500.3,
-        "current_price": 470.85,
+        "current_price": 470.0,
         "highest_price": 500.3,
         "initial_stop": 446.11,
         "trailing_stop": 446.11,
@@ -32,7 +32,7 @@
     "PCBL.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 334.8,
-        "current_price": 348.0,
+        "current_price": 345.45,
         "highest_price": 348.45001220703125,
         "initial_stop": 310.06,
         "trailing_stop": 343.22,
@@ -42,7 +42,7 @@
     "GRAPHITE.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 844.65,
-        "current_price": 829.6,
+        "current_price": 821.0,
         "highest_price": 844.65,
         "initial_stop": 646.49,
         "trailing_stop": 646.49,
@@ -52,7 +52,7 @@
     "HAL.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 5000.5,
-        "current_price": 4838.0,
+        "current_price": 4836.0,
         "highest_price": 5000.5,
         "initial_stop": 4439.55,
         "trailing_stop": 4439.55,
@@ -62,7 +62,7 @@
     "MANINFRA.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 128.72,
-        "current_price": 124.28,
+        "current_price": 124.75,
         "highest_price": 128.72,
         "initial_stop": 114.33,
         "trailing_stop": 114.33,
@@ -72,7 +72,7 @@
     "METROPOLIS.NS": {
         "entry_date": "2026-09-10",
         "entry_price": 602.1,
-        "current_price": 583.9,
+        "current_price": 585.5,
         "highest_price": 602.1,
         "initial_stop": 521.58,
         "trailing_stop": 521.58,
@@ -82,7 +82,7 @@
     "MIDHANI.NS": {
         "entry_date": "2026-09-11",
         "entry_price": 463.35,
-        "current_price": 417.5,
+        "current_price": 416.2,
         "highest_price": 463.35,
         "initial_stop": 388.4,
         "trailing_stop": 388.4,
@@ -92,7 +92,7 @@
     "MRPL.NS": {
         "entry_date": "2026-09-11",
         "entry_price": 181.32,
-        "current_price": 166.85,
+        "current_price": 166.32,
         "highest_price": 181.32,
         "initial_stop": 160.96,
         "trailing_stop": 160.96,
@@ -102,7 +102,7 @@
     "YESBANK.NS": {
         "entry_date": "2026-09-11",
         "entry_price": 23.48,
-        "current_price": 23.21,
+        "current_price": 23.24,
         "highest_price": 23.48,
         "initial_stop": 21.84,
         "trailing_stop": 21.84,
@@ -112,7 +112,7 @@
     "INDOCO.NS": {
         "entry_date": "2026-09-15",
         "entry_price": 263.02,
-        "current_price": 253.46,
+        "current_price": 251.16,
         "highest_price": 263.02,
         "initial_stop": 230.59,
         "trailing_stop": 230.59,
@@ -122,7 +122,7 @@
     "LICHSGFIN.NS": {
         "entry_date": "2026-09-15",
         "entry_price": 542.0,
-        "current_price": 576.35,
+        "current_price": 572.5,
         "highest_price": 576.3499755859375,
         "initial_stop": 531.41,
         "trailing_stop": 567.7,
@@ -132,7 +132,7 @@
     "INDUSINDBK.NS": {
         "entry_date": "2026-09-15",
         "entry_price": 978.2,
-        "current_price": 961.1,
+        "current_price": 959.3,
         "highest_price": 978.2,
         "initial_stop": 907.75,
         "trailing_stop": 907.75,
@@ -142,7 +142,7 @@
     "INDHOTEL.NS": {
         "entry_date": "2026-09-16",
         "entry_price": 715.0,
-        "current_price": 740.55,
+        "current_price": 743.7,
         "highest_price": 747.2000122070312,
         "initial_stop": 696.39,
         "trailing_stop": 735.99,
@@ -152,37 +152,27 @@
     "SHRIRAMFIN.NS": {
         "entry_date": "2026-09-16",
         "entry_price": 979.0,
-        "current_price": 1011.8,
+        "current_price": 1010.8,
         "highest_price": 1014.7999877929688,
         "initial_stop": 958.81,
         "trailing_stop": 999.57,
         "take_profit": 1285.35,
         "confidence": 50.0
     },
-    "FINEORG.NS": {
-        "entry_date": "2026-09-16",
-        "entry_price": 5193.0,
-        "current_price": 5149.0,
-        "highest_price": 5202.0,
-        "initial_stop": 4744.73,
-        "trailing_stop": 5123.94,
-        "take_profit": 6402.48,
-        "confidence": 50.0
-    },
     "GLENMARK.NS": {
         "entry_date": "2026-09-16",
         "entry_price": 2410.0,
-        "current_price": 2471.5,
-        "highest_price": 2471.5,
+        "current_price": 2475.0,
+        "highest_price": 2475.0,
         "initial_stop": 2183.3,
-        "trailing_stop": 2434.41,
+        "trailing_stop": 2437.86,
         "take_profit": 2801.26,
         "confidence": 50.0
     },
     "LODHA.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1140.4,
-        "current_price": 1163.1,
+        "current_price": 1162.5,
         "highest_price": 1163.0999755859375,
         "initial_stop": 1060.83,
         "trailing_stop": 1145.65,
@@ -192,7 +182,7 @@
     "SUNPHARMA.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1837.3,
-        "current_price": 1860.9,
+        "current_price": 1865.0,
         "highest_price": 1873.9000244140625,
         "initial_stop": 1796.57,
         "trailing_stop": 1845.78,
@@ -202,37 +192,37 @@
     "HINDALCO.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 986.5,
-        "current_price": 990.5,
-        "highest_price": 990.5,
+        "current_price": 1003.8,
+        "highest_price": 1003.7999877929688,
         "initial_stop": 950.35,
-        "trailing_stop": 975.64,
+        "trailing_stop": 988.74,
         "take_profit": 1394.0,
         "confidence": 50.0
     },
     "JSWSTEEL.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1275.6,
-        "current_price": 1290.9,
-        "highest_price": 1290.9000244140625,
+        "current_price": 1297.8,
+        "highest_price": 1297.800048828125,
         "initial_stop": 1220.97,
-        "trailing_stop": 1271.53,
+        "trailing_stop": 1278.33,
         "take_profit": 1485.36,
         "confidence": 50.0
     },
     "OBEROIRLTY.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1785.0,
-        "current_price": 1849.8,
-        "highest_price": 1849.800048828125,
+        "current_price": 1850.0,
+        "highest_price": 1850.0,
         "initial_stop": 1697.71,
-        "trailing_stop": 1822.04,
+        "trailing_stop": 1822.24,
         "take_profit": 2336.63,
         "confidence": 50.0
     },
     "POONAWALLA.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 479.4,
-        "current_price": 480.9,
+        "current_price": 478.85,
         "highest_price": 480.8999938964844,
         "initial_stop": 446.51,
         "trailing_stop": 473.68,
@@ -242,7 +232,7 @@
     "ZYDUSLIFE.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1160.0,
-        "current_price": 1158.0,
+        "current_price": 1170.1,
         "highest_price": 1171.0,
         "initial_stop": 1034.52,
         "trailing_stop": 1153.43,
@@ -252,7 +242,7 @@
     "ABCAPITAL.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 410.05,
-        "current_price": 402.0,
+        "current_price": 402.45,
         "highest_price": 410.05,
         "initial_stop": 360.74,
         "trailing_stop": 360.74,
@@ -262,17 +252,17 @@
     "CARBORUNIV.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 1124.4,
-        "current_price": 1237.0,
-        "highest_price": 1237.0,
+        "current_price": 1264.5,
+        "highest_price": 1264.5,
         "initial_stop": 998.41,
-        "trailing_stop": 1218.44,
+        "trailing_stop": 1245.53,
         "take_profit": 1612.93,
         "confidence": 50.0
     },
     "GENUSPOWER.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 310.75,
-        "current_price": 307.4,
+        "current_price": 308.35,
         "highest_price": 310.95001220703125,
         "initial_stop": 305.7,
         "trailing_stop": 306.28,
@@ -282,17 +272,17 @@
     "JSL.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 750.95,
-        "current_price": 752.5,
-        "highest_price": 752.5,
+        "current_price": 758.55,
+        "highest_price": 758.5499877929688,
         "initial_stop": 728.56,
-        "trailing_stop": 741.21,
+        "trailing_stop": 747.17,
         "take_profit": 1142.98,
         "confidence": 50.0
     },
     "TATAINVEST.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 702.35,
-        "current_price": 676.0,
+        "current_price": 674.3,
         "highest_price": 702.35,
         "initial_stop": 669.56,
         "trailing_stop": 669.56,
@@ -302,17 +292,17 @@
     "MARICO.NS": {
         "entry_date": "2026-09-18",
         "entry_price": 803.9,
-        "current_price": 830.25,
-        "highest_price": 830.25,
+        "current_price": 832.3,
+        "highest_price": 832.2999877929688,
         "initial_stop": 789.87,
-        "trailing_stop": 817.79,
+        "trailing_stop": 819.81,
         "take_profit": 969.42,
         "confidence": 50.0
     },
     "ADANIPORTS.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 1824.0,
-        "current_price": 1804.9,
+        "current_price": 1807.3,
         "highest_price": 1824.0,
         "initial_stop": 1622.48,
         "trailing_stop": 1622.48,
@@ -322,7 +312,7 @@
     "ATGL.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 660.7,
-        "current_price": 625.15,
+        "current_price": 625.25,
         "highest_price": 660.7,
         "initial_stop": 624.83,
         "trailing_stop": 624.83,
@@ -332,7 +322,7 @@
     "CLEAN.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 851.9,
-        "current_price": 837.35,
+        "current_price": 836.6,
         "highest_price": 851.9,
         "initial_stop": 824.34,
         "trailing_stop": 824.34,
@@ -342,7 +332,7 @@
     "SUPRAJIT.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 499.05,
-        "current_price": 488.0,
+        "current_price": 485.05,
         "highest_price": 499.05,
         "initial_stop": 461.1,
         "trailing_stop": 461.1,
@@ -352,7 +342,7 @@
     "ADANIGREEN.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 1334.5,
-        "current_price": 1295.7,
+        "current_price": 1300.9,
         "highest_price": 1334.5,
         "initial_stop": 1241.42,
         "trailing_stop": 1241.42,
@@ -362,7 +352,7 @@
     "PETRONET.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 292.6,
-        "current_price": 286.35,
+        "current_price": 285.85,
         "highest_price": 292.6,
         "initial_stop": 276.38,
         "trailing_stop": 276.38,
@@ -372,7 +362,7 @@
     "ABBOTINDIA.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 27270.0,
-        "current_price": 26995.0,
+        "current_price": 26935.0,
         "highest_price": 27270.0,
         "initial_stop": 26794.55,
         "trailing_stop": 26794.55,
@@ -382,7 +372,7 @@
     "CASTROLIND.NS": {
         "entry_date": "2026-09-21",
         "entry_price": 197.14,
-        "current_price": 195.2,
+        "current_price": 193.23,
         "highest_price": 197.14,
         "initial_stop": 184.84,
         "trailing_stop": 184.84,
@@ -392,7 +382,7 @@
     "COALINDIA.NS": {
         "entry_date": "2026-09-22",
         "entry_price": 428.0,
-        "current_price": 423.5,
+        "current_price": 424.55,
         "highest_price": 428.0,
         "initial_stop": 419.18,
         "trailing_stop": 419.18,
@@ -402,17 +392,17 @@
     "BAJAJHLDNG.NS": {
         "entry_date": "2026-09-22",
         "entry_price": 11185.0,
-        "current_price": 11345.0,
-        "highest_price": 11345.0,
+        "current_price": 11449.0,
+        "highest_price": 11449.0,
         "initial_stop": 10883.95,
-        "trailing_stop": 11174.76,
+        "trailing_stop": 11277.2,
         "take_profit": 16381.55,
         "confidence": 50.0
     },
     "DLF.NS": {
         "entry_date": "2026-09-22",
         "entry_price": 669.5,
-        "current_price": 675.3,
+        "current_price": 675.0,
         "highest_price": 675.2999877929688,
         "initial_stop": 641.24,
         "trailing_stop": 665.17,
@@ -422,7 +412,7 @@
     "BANDHANBNK.NS": {
         "entry_date": "2026-09-22",
         "entry_price": 184.7,
-        "current_price": 191.45,
+        "current_price": 191.38,
         "highest_price": 191.4499969482422,
         "initial_stop": 174.94,
         "trailing_stop": 188.58,
@@ -432,7 +422,7 @@
     "GRINDWELL.NS": {
         "entry_date": "2026-09-22",
         "entry_price": 1966.8,
-        "current_price": 1983.2,
+        "current_price": 1977.6,
         "highest_price": 1983.199951171875,
         "initial_stop": 1822.48,
         "trailing_stop": 1953.44,
@@ -442,10 +432,10 @@
     "SAIL.NS": {
         "entry_date": "2026-09-23",
         "entry_price": 183.18,
-        "current_price": 183.19,
-        "highest_price": 183.19000244140625,
+        "current_price": 185.44,
+        "highest_price": 185.44000244140625,
         "initial_stop": 166.18,
-        "trailing_stop": 180.44,
+        "trailing_stop": 182.66,
         "take_profit": 270.62,
         "confidence": 50.0
     },
@@ -457,6 +447,56 @@
         "initial_stop": 314.64,
         "trailing_stop": 314.64,
         "take_profit": 567.66,
+        "confidence": 50.0
+    },
+    "APOLLOHOSP.NS": {
+        "entry_date": "2026-09-23",
+        "entry_price": 9069.0,
+        "current_price": 9069.0,
+        "highest_price": 9069.0,
+        "initial_stop": 8132.58,
+        "trailing_stop": 8132.58,
+        "take_profit": 9986.69,
+        "confidence": 50.0
+    },
+    "TATASTEEL.NS": {
+        "entry_date": "2026-09-23",
+        "entry_price": 190.82,
+        "current_price": 190.82,
+        "highest_price": 190.82000732421875,
+        "initial_stop": 187.42,
+        "trailing_stop": 187.96,
+        "take_profit": 265.93,
+        "confidence": 50.0
+    },
+    "ASAHIINDIA.NS": {
+        "entry_date": "2026-09-23",
+        "entry_price": 971.3,
+        "current_price": 971.3,
+        "highest_price": 971.3,
+        "initial_stop": 897.6,
+        "trailing_stop": 897.6,
+        "take_profit": 1468.46,
+        "confidence": 50.0
+    },
+    "PHOENIXLTD.NS": {
+        "entry_date": "2026-09-23",
+        "entry_price": 1993.2,
+        "current_price": 1993.2,
+        "highest_price": 1993.2,
+        "initial_stop": 1804.4,
+        "trailing_stop": 1804.4,
+        "take_profit": 2584.58,
+        "confidence": 50.0
+    },
+    "WESTLIFE.NS": {
+        "entry_date": "2026-09-23",
+        "entry_price": 598.7,
+        "current_price": 598.7,
+        "highest_price": 598.7000122070312,
+        "initial_stop": 525.17,
+        "trailing_stop": 589.72,
+        "take_profit": 748.83,
         "confidence": 50.0
     }
 }
