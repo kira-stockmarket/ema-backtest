@@ -378,5 +378,15 @@
         "trailing_stop": 167.04,
         "take_profit": 232.34,
         "confidence": 50.0
+    },
+    "PHOENIXLTD.NS": {
+        "entry_date": "2026-09-24",
+        "entry_price": 1993.2,
+        "current_price": 1955.0,
+        "highest_price": 1993.2,
+        "initial_stop": 1800.41,
+        "trailing_stop": 1800.41,
+        "take_profit": 2584.58,
+        "confidence": 50.0
     }
 }
