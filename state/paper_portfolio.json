@@ -288,5 +288,25 @@
         "trailing_stop": 12964.24,
         "take_profit": 17276.91,
         "confidence": 50.0
+    },
+    "OBEROIRLTY.NS": {
+        "entry_date": "2026-09-28",
+        "entry_price": 1858.5,
+        "current_price": 1830.0,
+        "highest_price": 1858.5,
+        "initial_stop": 1699.02,
+        "trailing_stop": 1699.02,
+        "take_profit": 2410.13,
+        "confidence": 50.0
+    },
+    "MANINFRA.NS": {
+        "entry_date": "2026-09-28",
+        "entry_price": 129.95,
+        "current_price": 127.43,
+        "highest_price": 129.95,
+        "initial_stop": 114.63,
+        "trailing_stop": 114.63,
+        "take_profit": 202.98,
+        "confidence": 50.0
     }
 }
