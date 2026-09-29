@@ -428,5 +428,25 @@
         "trailing_stop": 77.97,
         "take_profit": 108.42,
         "confidence": 50.0
+    },
+    "INDOCO.NS": {
+        "entry_date": "2026-09-29",
+        "entry_price": 269.15,
+        "current_price": 269.15,
+        "highest_price": 269.15,
+        "initial_stop": 232.63,
+        "trailing_stop": 232.63,
+        "take_profit": 368.62,
+        "confidence": 50.0
+    },
+    "WHIRLPOOL.NS": {
+        "entry_date": "2026-09-29",
+        "entry_price": 917.1,
+        "current_price": 888.2,
+        "highest_price": 917.1,
+        "initial_stop": 858.48,
+        "trailing_stop": 858.48,
+        "take_profit": 1465.09,
+        "confidence": 50.0
     }
 }
