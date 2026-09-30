@@ -418,5 +418,35 @@
         "trailing_stop": 1825.69,
         "take_profit": 3079.08,
         "confidence": 50.0
+    },
+    "DRREDDY.NS": {
+        "entry_date": "2026-09-30",
+        "entry_price": 1251.9,
+        "current_price": 1233.0,
+        "highest_price": 1251.9,
+        "initial_stop": 1213.94,
+        "trailing_stop": 1213.94,
+        "take_profit": 1782.89,
+        "confidence": 50.0
+    },
+    "MANAPPURAM.NS": {
+        "entry_date": "2026-09-30",
+        "entry_price": 316.45,
+        "current_price": 315.85,
+        "highest_price": 316.45,
+        "initial_stop": 311.02,
+        "trailing_stop": 311.02,
+        "take_profit": 439.94,
+        "confidence": 50.0
+    },
+    "SUNTV.NS": {
+        "entry_date": "2026-09-30",
+        "entry_price": 553.25,
+        "current_price": 605.0,
+        "highest_price": 605.0,
+        "initial_stop": 512.4,
+        "trailing_stop": 595.92,
+        "take_profit": 914.4,
+        "confidence": 50.0
     }
 }
