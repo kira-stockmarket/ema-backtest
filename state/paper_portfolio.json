@@ -368,5 +368,25 @@
         "trailing_stop": 193.27,
         "take_profit": 300.67,
         "confidence": 50.0
+    },
+    "GALAXYSURF.NS": {
+        "entry_date": "2026-10-01",
+        "entry_price": 2332.8,
+        "current_price": 2376.9,
+        "highest_price": 2376.89990234375,
+        "initial_stop": 2007.62,
+        "trailing_stop": 2341.23,
+        "take_profit": 3295.82,
+        "confidence": 50.0
+    },
+    "KAJARIACER.NS": {
+        "entry_date": "2026-10-01",
+        "entry_price": 1235.1,
+        "current_price": 1225.1,
+        "highest_price": 1235.1,
+        "initial_stop": 1133.51,
+        "trailing_stop": 1133.51,
+        "take_profit": 1417.79,
+        "confidence": 50.0
     }
 }
