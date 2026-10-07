@@ -328,5 +328,15 @@
         "trailing_stop": 168.54,
         "take_profit": 261.1,
         "confidence": 50.0
+    },
+    "ADANIGREEN.NS": {
+        "entry_date": "2026-10-07",
+        "entry_price": 1313.0,
+        "current_price": 1341.4,
+        "highest_price": 1341.4000244140625,
+        "initial_stop": 1237.36,
+        "trailing_stop": 1321.27,
+        "take_profit": 2017.71,
+        "confidence": 50.0
     }
 }
