@@ -288,5 +288,15 @@
         "trailing_stop": 1037.99,
         "take_profit": 1593.42,
         "confidence": 50.0
+    },
+    "GRINDWELL.NS": {
+        "entry_date": "2026-10-09",
+        "entry_price": 2007.0,
+        "current_price": 1990.6,
+        "highest_price": 2007.0,
+        "initial_stop": 1836.09,
+        "trailing_stop": 1836.09,
+        "take_profit": 3091.98,
+        "confidence": 50.0
     }
 }
