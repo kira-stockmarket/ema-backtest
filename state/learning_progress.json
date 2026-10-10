@@ -1,0 +1,128 @@
+[
+  {
+    "timestamp": "2026-09-09T22:23:03.322072",
+    "version": 0,
+    "total_trades": 3283,
+    "metrics": {
+      "new_trades": 3283,
+      "total_trades": 3283,
+      "params": {
+        "broom_compression_threshold": 0.08,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.015,
+        "measured_move_multiplier": 2.0
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.08,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.015,
+      "measured_move_multiplier": 2.0
+    }
+  },
+  {
+    "timestamp": "2026-09-09T22:26:54.740282",
+    "version": 1,
+    "total_trades": 3701,
+    "metrics": {
+      "new_trades": 3201,
+      "total_trades": 3701,
+      "params": {
+        "broom_compression_threshold": 0.077396468960998,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.0165,
+        "measured_move_multiplier": 1.8
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.077396468960998,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.0165,
+      "measured_move_multiplier": 1.8
+    }
+  },
+  {
+    "timestamp": "2026-09-09T22:31:44.218040",
+    "version": 2,
+    "total_trades": 3611,
+    "metrics": {
+      "new_trades": 3111,
+      "total_trades": 3611,
+      "params": {
+        "broom_compression_threshold": 0.0749065039252594,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.018150000000000003,
+        "measured_move_multiplier": 1.62
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.0749065039252594,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.018150000000000003,
+      "measured_move_multiplier": 1.62
+    }
+  },
+  {
+    "timestamp": "2026-09-09T22:43:06.704098",
+    "version": 3,
+    "total_trades": 3505,
+    "metrics": {
+      "new_trades": 3005,
+      "total_trades": 3505,
+      "params": {
+        "broom_compression_threshold": 0.07254103714130772,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.019965000000000004,
+        "measured_move_multiplier": 1.4580000000000002
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.07254103714130772,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.019965000000000004,
+      "measured_move_multiplier": 1.4580000000000002
+    }
+  },
+  {
+    "timestamp": "2026-09-10T00:17:51.436725",
+    "version": 4,
+    "total_trades": 3398,
+    "metrics": {
+      "new_trades": 2898,
+      "total_trades": 3398,
+      "params": {
+        "broom_compression_threshold": 0.07029384369655363,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.021961500000000005,
+        "measured_move_multiplier": 1.3122000000000003
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.07029384369655363,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.021961500000000005,
+      "measured_move_multiplier": 1.3122000000000003
+    }
+  },
+  {
+    "timestamp": "2026-09-10T04:52:19.573650",
+    "version": 5,
+    "total_trades": 3315,
+    "metrics": {
+      "new_trades": 2815,
+      "total_trades": 3315,
+      "params": {
+        "broom_compression_threshold": 0.06815900992403724,
+        "volume_threshold_multiplier": 1.5,
+        "stop_loss_buffer": 0.024157650000000006,
+        "measured_move_multiplier": 1.2
+      }
+    },
+    "params": {
+      "broom_compression_threshold": 0.06815900992403724,
+      "volume_threshold_multiplier": 1.5,
+      "stop_loss_buffer": 0.024157650000000006,
+      "measured_move_multiplier": 1.2
+    }
+  }
+]
