@@ -388,5 +388,25 @@
         "trailing_stop": 532.68,
         "take_profit": 864.47,
         "confidence": 50.0
+    },
+    "PERSISTENT.NS": {
+        "entry_date": "2026-10-14",
+        "entry_price": 5898.0,
+        "current_price": 5898.0,
+        "highest_price": 5898.0,
+        "initial_stop": 5293.53,
+        "trailing_stop": 5293.53,
+        "take_profit": 9880.84,
+        "confidence": 50.0
+    },
+    "FSL.NS": {
+        "entry_date": "2026-10-14",
+        "entry_price": 288.5,
+        "current_price": 288.5,
+        "highest_price": 288.5,
+        "initial_stop": 267.39,
+        "trailing_stop": 267.39,
+        "take_profit": 552.39,
+        "confidence": 50.0
     }
 }
