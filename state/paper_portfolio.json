@@ -408,5 +408,15 @@
         "trailing_stop": 267.39,
         "take_profit": 552.39,
         "confidence": 50.0
+    },
+    "KARURVYSYA.NS": {
+        "entry_date": "2026-10-14",
+        "entry_price": 348.6,
+        "current_price": 341.25,
+        "highest_price": 348.6,
+        "initial_stop": 298.87,
+        "trailing_stop": 298.87,
+        "take_profit": 428.53,
+        "confidence": 50.0
     }
 }
