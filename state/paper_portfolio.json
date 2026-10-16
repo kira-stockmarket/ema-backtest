@@ -498,5 +498,25 @@
         "trailing_stop": 643.69,
         "take_profit": 1073.39,
         "confidence": 50.0
+    },
+    "ZYDUSLIFE.NS": {
+        "entry_date": "2026-10-16",
+        "entry_price": 1124.7,
+        "current_price": 1123.0,
+        "highest_price": 1124.7,
+        "initial_stop": 1044.12,
+        "trailing_stop": 1044.12,
+        "take_profit": 1339.02,
+        "confidence": 50.0
+    },
+    "UNIONBANK.NS": {
+        "entry_date": "2026-10-16",
+        "entry_price": 171.68,
+        "current_price": 171.68,
+        "highest_price": 171.68,
+        "initial_stop": 168.55,
+        "trailing_stop": 168.55,
+        "take_profit": 259.63,
+        "confidence": 50.0
     }
 }
