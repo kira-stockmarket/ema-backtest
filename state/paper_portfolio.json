@@ -398,5 +398,45 @@
         "trailing_stop": 191.46,
         "take_profit": 232.69,
         "confidence": 50.0
+    },
+    "NUVOCO.NS": {
+        "entry_date": "2026-10-19",
+        "entry_price": 341.45,
+        "current_price": 341.45,
+        "highest_price": 341.45001220703125,
+        "initial_stop": 331.83,
+        "trailing_stop": 336.33,
+        "take_profit": 493.78,
+        "confidence": 50.0
+    },
+    "BHARTIARTL.NS": {
+        "entry_date": "2026-10-19",
+        "entry_price": 1905.0,
+        "current_price": 1875.2,
+        "highest_price": 1905.0,
+        "initial_stop": 1873.69,
+        "trailing_stop": 1873.69,
+        "take_profit": 2600.07,
+        "confidence": 50.0
+    },
+    "INDHOTEL.NS": {
+        "entry_date": "2026-10-19",
+        "entry_price": 772.1,
+        "current_price": 760.0,
+        "highest_price": 772.1,
+        "initial_stop": 697.46,
+        "trailing_stop": 697.46,
+        "take_profit": 866.58,
+        "confidence": 50.0
+    },
+    "JUSTDIAL.NS": {
+        "entry_date": "2026-10-19",
+        "entry_price": 713.25,
+        "current_price": 731.75,
+        "highest_price": 731.75,
+        "initial_stop": 642.2,
+        "trailing_stop": 720.77,
+        "take_profit": 1073.39,
+        "confidence": 50.0
     }
 }
