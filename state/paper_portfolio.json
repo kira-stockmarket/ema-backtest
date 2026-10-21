@@ -338,5 +338,15 @@
         "trailing_stop": 1846.27,
         "take_profit": 2548.67,
         "confidence": 50.0
+    },
+    "JSWSTEEL.NS": {
+        "entry_date": "2026-10-21",
+        "entry_price": 1241.3,
+        "current_price": 1222.9,
+        "highest_price": 1241.3,
+        "initial_stop": 1220.15,
+        "trailing_stop": 1220.15,
+        "take_profit": 1567.78,
+        "confidence": 50.0
     }
 }
