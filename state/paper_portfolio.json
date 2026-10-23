@@ -298,5 +298,15 @@
         "trailing_stop": 333.64,
         "take_profit": 508.35,
         "confidence": 50.0
+    },
+    "BAJAJHLDNG.NS": {
+        "entry_date": "2026-10-23",
+        "entry_price": 11293.0,
+        "current_price": 11175.0,
+        "highest_price": 11293.0,
+        "initial_stop": 10865.61,
+        "trailing_stop": 10865.61,
+        "take_profit": 16489.55,
+        "confidence": 50.0
     }
 }
