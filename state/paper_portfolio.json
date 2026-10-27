@@ -368,5 +368,15 @@
         "trailing_stop": 3303.28,
         "take_profit": 4361.95,
         "confidence": 50.0
+    },
+    "CASTROLIND.NS": {
+        "entry_date": "2026-10-27",
+        "entry_price": 190.78,
+        "current_price": 188.86,
+        "highest_price": 190.78,
+        "initial_stop": 186.38,
+        "trailing_stop": 186.38,
+        "take_profit": 223.6,
+        "confidence": 50.0
     }
 }
