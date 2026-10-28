@@ -398,5 +398,15 @@
         "trailing_stop": 165.05,
         "take_profit": 289.94,
         "confidence": 50.0
+    },
+    "BHARTIARTL.NS": {
+        "entry_date": "2026-10-28",
+        "entry_price": 1978.8,
+        "current_price": 1948.1,
+        "highest_price": 1978.8,
+        "initial_stop": 1877.33,
+        "trailing_stop": 1877.33,
+        "take_profit": 2653.24,
+        "confidence": 50.0
     }
 }
