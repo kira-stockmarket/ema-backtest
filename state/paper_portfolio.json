@@ -418,5 +418,55 @@
         "trailing_stop": 1032.32,
         "take_profit": 1345.2,
         "confidence": 50.0
+    },
+    "BAJAJ-AUTO.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 10485.0,
+        "current_price": 10350.0,
+        "highest_price": 10485.0,
+        "initial_stop": 10224.15,
+        "trailing_stop": 10224.15,
+        "take_profit": 15277.26,
+        "confidence": 50.0
+    },
+    "TVSMOTOR.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 4239.9,
+        "current_price": 4195.2,
+        "highest_price": 4239.9,
+        "initial_stop": 3789.99,
+        "trailing_stop": 3789.99,
+        "take_profit": 5496.07,
+        "confidence": 50.0
+    },
+    "APLAPOLLO.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 2165.1,
+        "current_price": 2165.1,
+        "highest_price": 2165.10009765625,
+        "initial_stop": 1971.06,
+        "trailing_stop": 2132.61,
+        "take_profit": 3121.52,
+        "confidence": 50.0
+    },
+    "FSL.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 292.9,
+        "current_price": 292.9,
+        "highest_price": 292.9,
+        "initial_stop": 271.71,
+        "trailing_stop": 271.71,
+        "take_profit": 532.68,
+        "confidence": 50.0
+    },
+    "RKFORGE.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 646.9,
+        "current_price": 646.9,
+        "highest_price": 646.9000244140625,
+        "initial_stop": 614.02,
+        "trailing_stop": 637.19,
+        "take_profit": 988.09,
+        "confidence": 50.0
     }
 }
