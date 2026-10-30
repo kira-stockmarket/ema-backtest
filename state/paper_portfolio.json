@@ -468,5 +468,35 @@
         "trailing_stop": 637.19,
         "take_profit": 988.09,
         "confidence": 50.0
+    },
+    "BSOFT.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 342.5,
+        "current_price": 323.0,
+        "highest_price": 342.5,
+        "initial_stop": 320.71,
+        "trailing_stop": 320.71,
+        "take_profit": 692.57,
+        "confidence": 50.0
+    },
+    "GRINDWELL.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 1955.2,
+        "current_price": 1878.6,
+        "highest_price": 1955.2,
+        "initial_stop": 1840.9,
+        "trailing_stop": 1840.9,
+        "take_profit": 3086.36,
+        "confidence": 50.0
+    },
+    "VOLTAMP.NS": {
+        "entry_date": "2026-10-30",
+        "entry_price": 10176.0,
+        "current_price": 10351.0,
+        "highest_price": 10351.0,
+        "initial_stop": 9496.23,
+        "trailing_stop": 10195.68,
+        "take_profit": 16795.18,
+        "confidence": 50.0
     }
 }
