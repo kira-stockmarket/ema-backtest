@@ -498,5 +498,35 @@
         "trailing_stop": 266.74,
         "take_profit": 377.06,
         "confidence": 50.0
+    },
+    "NH.NS": {
+        "entry_date": "2026-11-03",
+        "entry_price": 1870.6,
+        "current_price": 1870.6,
+        "highest_price": 1870.6,
+        "initial_stop": 1810.92,
+        "trailing_stop": 1810.92,
+        "take_profit": 2665.81,
+        "confidence": 50.0
+    },
+    "NUVOCO.NS": {
+        "entry_date": "2026-11-03",
+        "entry_price": 338.8,
+        "current_price": 338.05,
+        "highest_price": 338.8,
+        "initial_stop": 330.83,
+        "trailing_stop": 330.83,
+        "take_profit": 491.13,
+        "confidence": 50.0
+    },
+    "RKFORGE.NS": {
+        "entry_date": "2026-11-03",
+        "entry_price": 696.1,
+        "current_price": 691.45,
+        "highest_price": 696.1,
+        "initial_stop": 614.55,
+        "trailing_stop": 614.55,
+        "take_profit": 1037.29,
+        "confidence": 50.0
     }
 }
