@@ -548,5 +548,15 @@
         "trailing_stop": 337.13,
         "take_profit": 525.95,
         "confidence": 50.0
+    },
+    "CARBORUNIV.NS": {
+        "entry_date": "2026-11-04",
+        "entry_price": 1110.1,
+        "current_price": 1093.4,
+        "highest_price": 1110.1,
+        "initial_stop": 1028.75,
+        "trailing_stop": 1028.75,
+        "take_profit": 1755.61,
+        "confidence": 50.0
     }
 }
