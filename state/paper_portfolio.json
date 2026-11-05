@@ -748,5 +748,25 @@
         "trailing_stop": 75.7,
         "take_profit": 121.86,
         "confidence": 50.0
+    },
+    "ADANIPORTS.NS": {
+        "entry_date": "2026-11-05",
+        "entry_price": 1910.0,
+        "current_price": 1884.6,
+        "highest_price": 1910.0,
+        "initial_stop": 1656.06,
+        "trailing_stop": 1656.06,
+        "take_profit": 2414.09,
+        "confidence": 50.0
+    },
+    "METROPOLIS.NS": {
+        "entry_date": "2026-11-05",
+        "entry_price": 581.25,
+        "current_price": 571.0,
+        "highest_price": 581.25,
+        "initial_stop": 527.13,
+        "trailing_stop": 527.13,
+        "take_profit": 746.1,
+        "confidence": 50.0
     }
 }
