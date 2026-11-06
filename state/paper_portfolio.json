@@ -788,5 +788,45 @@
         "trailing_stop": 266.98,
         "take_profit": 352.51,
         "confidence": 50.0
+    },
+    "MANAPPURAM.NS": {
+        "entry_date": "2026-11-06",
+        "entry_price": 326.0,
+        "current_price": 325.4,
+        "highest_price": 326.0,
+        "initial_stop": 308.29,
+        "trailing_stop": 308.29,
+        "take_profit": 513.26,
+        "confidence": 50.0
+    },
+    "KAJARIACER.NS": {
+        "entry_date": "2026-11-06",
+        "entry_price": 1205.8,
+        "current_price": 1180.7,
+        "highest_price": 1205.8,
+        "initial_stop": 1134.02,
+        "trailing_stop": 1134.02,
+        "take_profit": 1522.3,
+        "confidence": 50.0
+    },
+    "MATRIMONY.NS": {
+        "entry_date": "2026-11-06",
+        "entry_price": 565.25,
+        "current_price": 549.2,
+        "highest_price": 565.25,
+        "initial_stop": 479.92,
+        "trailing_stop": 479.92,
+        "take_profit": 918.71,
+        "confidence": 50.0
+    },
+    "RKFORGE.NS": {
+        "entry_date": "2026-11-06",
+        "entry_price": 724.65,
+        "current_price": 693.85,
+        "highest_price": 724.65,
+        "initial_stop": 616.2,
+        "trailing_stop": 616.2,
+        "take_profit": 1065.84,
+        "confidence": 50.0
     }
 }
