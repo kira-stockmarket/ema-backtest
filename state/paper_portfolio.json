@@ -302,7 +302,7 @@
     "PDSL.NS": {
         "entry_date": "2026-11-04",
         "entry_price": 359.5,
-        "current_price": 407.75,
+        "current_price": 405.55,
         "highest_price": 411.70001220703125,
         "initial_stop": 337.13,
         "trailing_stop": 405.52,
@@ -437,16 +437,6 @@
         "initial_stop": 208.84,
         "trailing_stop": 221.62,
         "take_profit": 290.39,
-        "confidence": 50.0
-    },
-    "GALAXYSURF.NS": {
-        "entry_date": "2026-11-05",
-        "entry_price": 2163.1,
-        "current_price": 2197.1,
-        "highest_price": 2224.300048828125,
-        "initial_stop": 2072.92,
-        "trailing_stop": 2190.92,
-        "take_profit": 3181.1,
         "confidence": 50.0
     },
     "MAHABANK.NS": {
