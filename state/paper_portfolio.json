@@ -828,5 +828,95 @@
         "trailing_stop": 1132.55,
         "take_profit": 1729.68,
         "confidence": 50.0
+    },
+    "HAL.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 4843.4,
+        "current_price": 4843.4,
+        "highest_price": 4843.4,
+        "initial_stop": 4562.06,
+        "trailing_stop": 4562.06,
+        "take_profit": 5859.37,
+        "confidence": 50.0
+    },
+    "TITAN.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 4970.0,
+        "current_price": 4921.9,
+        "highest_price": 4970.0,
+        "initial_stop": 4425.21,
+        "trailing_stop": 4425.21,
+        "take_profit": 6623.86,
+        "confidence": 50.0
+    },
+    "BAJAJ-AUTO.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 11040.0,
+        "current_price": 10945.0,
+        "highest_price": 11040.0,
+        "initial_stop": 10235.56,
+        "trailing_stop": 10235.56,
+        "take_profit": 15832.26,
+        "confidence": 50.0
+    },
+    "EICHERMOT.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 7592.0,
+        "current_price": 7549.0,
+        "highest_price": 7592.0,
+        "initial_stop": 7264.35,
+        "trailing_stop": 7264.35,
+        "take_profit": 10616.56,
+        "confidence": 50.0
+    },
+    "M&M.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 3465.0,
+        "current_price": 3399.0,
+        "highest_price": 3465.0,
+        "initial_stop": 3160.7,
+        "trailing_stop": 3160.7,
+        "take_profit": 5228.82,
+        "confidence": 50.0
+    },
+    "MARICO.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 925.0,
+        "current_price": 902.0,
+        "highest_price": 925.0,
+        "initial_stop": 792.66,
+        "trailing_stop": 792.66,
+        "take_profit": 946.06,
+        "confidence": 50.0
+    },
+    "TVSMOTOR.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 4560.0,
+        "current_price": 4500.0,
+        "highest_price": 4560.0,
+        "initial_stop": 3830.95,
+        "trailing_stop": 3830.95,
+        "take_profit": 4717.15,
+        "confidence": 50.0
+    },
+    "HINDPETRO.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 400.15,
+        "current_price": 390.6,
+        "highest_price": 400.15,
+        "initial_stop": 380.7,
+        "trailing_stop": 380.7,
+        "take_profit": 670.04,
+        "confidence": 50.0
+    },
+    "KANSAINER.NS": {
+        "entry_date": "2026-11-12",
+        "entry_price": 206.23,
+        "current_price": 201.12,
+        "highest_price": 206.23,
+        "initial_stop": 198.98,
+        "trailing_stop": 198.98,
+        "take_profit": 341.71,
+        "confidence": 50.0
     }
 }
