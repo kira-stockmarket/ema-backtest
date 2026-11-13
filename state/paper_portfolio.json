@@ -778,5 +778,45 @@
         "trailing_stop": 3168.35,
         "take_profit": 4292.35,
         "confidence": 50.0
+    },
+    "CANBK.NS": {
+        "entry_date": "2026-11-13",
+        "entry_price": 132.3,
+        "current_price": 130.91,
+        "highest_price": 132.3,
+        "initial_stop": 128.34,
+        "trailing_stop": 128.34,
+        "take_profit": 213.94,
+        "confidence": 50.0
+    },
+    "CIPLA.NS": {
+        "entry_date": "2026-11-13",
+        "entry_price": 1408.3,
+        "current_price": 1391.8,
+        "highest_price": 1408.3,
+        "initial_stop": 1374.77,
+        "trailing_stop": 1374.77,
+        "take_profit": 1745.26,
+        "confidence": 50.0
+    },
+    "PRESTIGE.NS": {
+        "entry_date": "2026-11-13",
+        "entry_price": 1693.9,
+        "current_price": 1650.0,
+        "highest_price": 1693.9,
+        "initial_stop": 1504.98,
+        "trailing_stop": 1504.98,
+        "take_profit": 2333.15,
+        "confidence": 50.0
+    },
+    "PRINCEPIPE.NS": {
+        "entry_date": "2026-11-13",
+        "entry_price": 318.9,
+        "current_price": 315.65,
+        "highest_price": 318.9,
+        "initial_stop": 268.37,
+        "trailing_stop": 268.37,
+        "take_profit": 364.91,
+        "confidence": 50.0
     }
 }
