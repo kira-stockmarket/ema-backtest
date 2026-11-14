@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+env/
+
+# Data cache (don't commit)
+data_cache/
+
+# Logs (don't commit)
+logs/
+
+# Results directory
+results/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# DO NOT ignore these - needed for learning
+# state/
+# nifty500_broom_breakout_results.csv
+# index.html
