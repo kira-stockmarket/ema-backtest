@@ -668,5 +668,15 @@
         "trailing_stop": 375.74,
         "take_profit": 624.98,
         "confidence": 50.0
+    },
+    "ASHOKLEY.NS": {
+        "entry_date": "2026-11-17",
+        "entry_price": 167.49,
+        "current_price": 167.49,
+        "highest_price": 167.49000549316406,
+        "initial_stop": 159.5,
+        "trailing_stop": 164.98,
+        "take_profit": 298.4,
+        "confidence": 50.0
     }
 }
