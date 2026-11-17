@@ -698,5 +698,25 @@
         "trailing_stop": 1015.43,
         "take_profit": 1658.31,
         "confidence": 50.0
+    },
+    "APLAPOLLO.NS": {
+        "entry_date": "2026-11-17",
+        "entry_price": 2250.2,
+        "current_price": 2188.5,
+        "highest_price": 2250.2,
+        "initial_stop": 1989.21,
+        "trailing_stop": 1989.21,
+        "take_profit": 3206.62,
+        "confidence": 50.0
+    },
+    "ASHOKLEY.NS": {
+        "entry_date": "2026-11-17",
+        "entry_price": 167.49,
+        "current_price": 160.5,
+        "highest_price": 167.49,
+        "initial_stop": 159.5,
+        "trailing_stop": 159.5,
+        "take_profit": 298.4,
+        "confidence": 50.0
     }
 }
