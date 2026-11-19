@@ -638,5 +638,35 @@
         "trailing_stop": 294.19,
         "take_profit": 416.03,
         "confidence": 50.0
+    },
+    "ADANIENT.NS": {
+        "entry_date": "2026-11-19",
+        "entry_price": 2745.1,
+        "current_price": 2684.2,
+        "highest_price": 2745.1,
+        "initial_stop": 2662.32,
+        "trailing_stop": 2662.32,
+        "take_profit": 4122.56,
+        "confidence": 50.0
+    },
+    "LICHSGFIN.NS": {
+        "entry_date": "2026-11-19",
+        "entry_price": 622.5,
+        "current_price": 610.0,
+        "highest_price": 622.5,
+        "initial_stop": 530.44,
+        "trailing_stop": 530.44,
+        "take_profit": 666.31,
+        "confidence": 50.0
+    },
+    "DELHIVERY.NS": {
+        "entry_date": "2026-11-19",
+        "entry_price": 457.95,
+        "current_price": 449.5,
+        "highest_price": 457.95,
+        "initial_stop": 432.16,
+        "trailing_stop": 432.16,
+        "take_profit": 727.5,
+        "confidence": 50.0
     }
 }
