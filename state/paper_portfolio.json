@@ -698,5 +698,25 @@
         "trailing_stop": 741.9,
         "take_profit": 1072.91,
         "confidence": 50.0
+    },
+    "INDOCO.NS": {
+        "entry_date": "2026-11-19",
+        "entry_price": 242.01,
+        "current_price": 233.08,
+        "highest_price": 242.01,
+        "initial_stop": 228.16,
+        "trailing_stop": 228.16,
+        "take_profit": 381.9,
+        "confidence": 50.0
+    },
+    "KPRMILL.NS": {
+        "entry_date": "2026-11-19",
+        "entry_price": 1207.5,
+        "current_price": 1189.4,
+        "highest_price": 1207.5,
+        "initial_stop": 1052.1,
+        "trailing_stop": 1052.1,
+        "take_profit": 1787.38,
+        "confidence": 50.0
     }
 }
