@@ -628,5 +628,155 @@
         "trailing_stop": 6424.11,
         "take_profit": 11198.92,
         "confidence": 50.0
+    },
+    "HDFCBANK.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 846.0,
+        "current_price": 817.8,
+        "highest_price": 846.0,
+        "initial_stop": 776.82,
+        "trailing_stop": 776.82,
+        "take_profit": 1395.43,
+        "confidence": 50.0
+    },
+    "ICICIBANK.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1640.0,
+        "current_price": 1585.5,
+        "highest_price": 1640.0,
+        "initial_stop": 1369.1,
+        "trailing_stop": 1369.1,
+        "take_profit": 1729.48,
+        "confidence": 50.0
+    },
+    "SBIN.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1165.1,
+        "current_price": 1132.65,
+        "highest_price": 1165.1,
+        "initial_stop": 1003.91,
+        "trailing_stop": 1003.91,
+        "take_profit": 1673.93,
+        "confidence": 50.0
+    },
+    "AXISBANK.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1446.0,
+        "current_price": 1388.6,
+        "highest_price": 1446.0,
+        "initial_stop": 1256.01,
+        "trailing_stop": 1256.01,
+        "take_profit": 1899.35,
+        "confidence": 50.0
+    },
+    "INDUSINDBK.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1003.0,
+        "current_price": 963.0,
+        "highest_price": 1003.0,
+        "initial_stop": 904.14,
+        "trailing_stop": 904.14,
+        "take_profit": 1426.49,
+        "confidence": 50.0
+    },
+    "TATACONSUM.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1155.9,
+        "current_price": 1133.0,
+        "highest_price": 1155.9,
+        "initial_stop": 1064.83,
+        "trailing_stop": 1064.83,
+        "take_profit": 1776.2,
+        "confidence": 50.0
+    },
+    "BANKBARODA.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 287.0,
+        "current_price": 275.58,
+        "highest_price": 287.0,
+        "initial_stop": 254.21,
+        "trailing_stop": 254.21,
+        "take_profit": 459.0,
+        "confidence": 50.0
+    },
+    "BANKINDIA.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 164.7,
+        "current_price": 159.01,
+        "highest_price": 164.7,
+        "initial_stop": 141.06,
+        "trailing_stop": 141.06,
+        "take_profit": 257.26,
+        "confidence": 50.0
+    },
+    "CANBK.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 138.92,
+        "current_price": 133.75,
+        "highest_price": 138.92,
+        "initial_stop": 128.84,
+        "trailing_stop": 128.84,
+        "take_profit": 220.56,
+        "confidence": 50.0
+    },
+    "IDFCFIRSTB.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 87.26,
+        "current_price": 85.4,
+        "highest_price": 87.26,
+        "initial_stop": 77.65,
+        "trailing_stop": 77.65,
+        "take_profit": 121.24,
+        "confidence": 50.0
+    },
+    "PIDILITIND.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 1620.0,
+        "current_price": 1594.2,
+        "highest_price": 1620.0,
+        "initial_stop": 1498.91,
+        "trailing_stop": 1498.91,
+        "take_profit": 2237.77,
+        "confidence": 50.0
+    },
+    "BRIGADE.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 578.35,
+        "current_price": 581.65,
+        "highest_price": 581.6500244140625,
+        "initial_stop": 569.3,
+        "trailing_stop": 572.92,
+        "take_profit": 950.41,
+        "confidence": 50.0
+    },
+    "EXIDEIND.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 408.55,
+        "current_price": 401.85,
+        "highest_price": 408.55,
+        "initial_stop": 381.94,
+        "trailing_stop": 381.94,
+        "take_profit": 692.31,
+        "confidence": 50.0
+    },
+    "INDIANB.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 950.0,
+        "current_price": 933.0,
+        "highest_price": 950.0,
+        "initial_stop": 848.78,
+        "trailing_stop": 848.78,
+        "take_profit": 1341.86,
+        "confidence": 50.0
+    },
+    "SYNGENE.NS": {
+        "entry_date": "2026-11-23",
+        "entry_price": 451.7,
+        "current_price": 443.65,
+        "highest_price": 451.7,
+        "initial_stop": 434.45,
+        "trailing_stop": 434.45,
+        "take_profit": 746.21,
+        "confidence": 50.0
     }
 }
