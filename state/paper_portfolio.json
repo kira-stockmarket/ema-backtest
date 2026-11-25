@@ -818,5 +818,25 @@
         "trailing_stop": 199.45,
         "take_profit": 337.97,
         "confidence": 50.0
+    },
+    "JINDALSTEL.NS": {
+        "entry_date": "2026-11-25",
+        "entry_price": 1131.3,
+        "current_price": 1105.0,
+        "highest_price": 1131.3,
+        "initial_stop": 1093.95,
+        "trailing_stop": 1093.95,
+        "take_profit": 1647.91,
+        "confidence": 50.0
+    },
+    "PERSISTENT.NS": {
+        "entry_date": "2026-11-25",
+        "entry_price": 6282.5,
+        "current_price": 6120.0,
+        "highest_price": 6282.5,
+        "initial_stop": 5497.29,
+        "trailing_stop": 5497.29,
+        "take_profit": 10186.68,
+        "confidence": 50.0
     }
 }
