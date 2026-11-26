@@ -728,5 +728,85 @@
         "trailing_stop": 530.27,
         "take_profit": 745.15,
         "confidence": 50.0
+    },
+    "BAJAJFINSV.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 1925.0,
+        "current_price": 1885.9,
+        "highest_price": 1925.0,
+        "initial_stop": 1840.03,
+        "trailing_stop": 1840.03,
+        "take_profit": 2760.14,
+        "confidence": 50.0
+    },
+    "EICHERMOT.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 8336.0,
+        "current_price": 8180.0,
+        "highest_price": 8336.0,
+        "initial_stop": 7334.67,
+        "trailing_stop": 7334.67,
+        "take_profit": 8588.05,
+        "confidence": 50.0
+    },
+    "TATACONSUM.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 1185.8,
+        "current_price": 1164.0,
+        "highest_price": 1185.8,
+        "initial_stop": 1066.31,
+        "trailing_stop": 1066.31,
+        "take_profit": 1806.1,
+        "confidence": 50.0
+    },
+    "TRENT.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 3319.6,
+        "current_price": 3262.6,
+        "highest_price": 3319.6,
+        "initial_stop": 2994.58,
+        "trailing_stop": 2994.58,
+        "take_profit": 4764.05,
+        "confidence": 50.0
+    },
+    "APOLLOTYRE.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 437.35,
+        "current_price": 426.15,
+        "highest_price": 437.35,
+        "initial_stop": 425.56,
+        "trailing_stop": 425.56,
+        "take_profit": 719.34,
+        "confidence": 50.0
+    },
+    "BLUESTARCO.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 1821.5,
+        "current_price": 1780.2,
+        "highest_price": 1821.5,
+        "initial_stop": 1615.64,
+        "trailing_stop": 1615.64,
+        "take_profit": 2831.88,
+        "confidence": 50.0
+    },
+    "CUB.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 247.0,
+        "current_price": 239.0,
+        "highest_price": 247.0,
+        "initial_stop": 212.81,
+        "trailing_stop": 212.81,
+        "take_profit": 271.63,
+        "confidence": 50.0
+    },
+    "INDIGO.NS": {
+        "entry_date": "2026-11-26",
+        "entry_price": 5720.0,
+        "current_price": 5625.0,
+        "highest_price": 5720.0,
+        "initial_stop": 4981.18,
+        "trailing_stop": 4981.18,
+        "take_profit": 6234.24,
+        "confidence": 50.0
     }
 }
