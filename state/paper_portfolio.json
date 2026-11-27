@@ -598,5 +598,105 @@
         "trailing_stop": 723.92,
         "take_profit": 1023.11,
         "confidence": 50.0
+    },
+    "DELHIVERY.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 458.6,
+        "current_price": 458.6,
+        "highest_price": 458.6000061035156,
+        "initial_stop": 432.62,
+        "trailing_stop": 451.72,
+        "take_profit": 728.15,
+        "confidence": 50.0
+    },
+    "HEROMOTOCO.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 5789.0,
+        "current_price": 5701.0,
+        "highest_price": 5789.0,
+        "initial_stop": 5292.04,
+        "trailing_stop": 5292.04,
+        "take_profit": 7670.04,
+        "confidence": 50.0
+    },
+    "BAJAJHLDNG.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 11933.0,
+        "current_price": 11703.0,
+        "highest_price": 11933.0,
+        "initial_stop": 10724.77,
+        "trailing_stop": 10724.77,
+        "take_profit": 12799.09,
+        "confidence": 50.0
+    },
+    "GODREJPROP.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 2004.3,
+        "current_price": 1943.0,
+        "highest_price": 2004.3,
+        "initial_stop": 1809.07,
+        "trailing_stop": 1809.07,
+        "take_profit": 3208.03,
+        "confidence": 50.0
+    },
+    "OBEROIRLTY.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 1905.2,
+        "current_price": 1889.2,
+        "highest_price": 1905.2,
+        "initial_stop": 1704.02,
+        "trailing_stop": 1704.02,
+        "take_profit": 2610.76,
+        "confidence": 50.0
+    },
+    "PRESTIGE.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 1832.1,
+        "current_price": 1796.7,
+        "highest_price": 1832.1,
+        "initial_stop": 1511.69,
+        "trailing_stop": 1511.69,
+        "take_profit": 2471.35,
+        "confidence": 50.0
+    },
+    "BRIGADE.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 628.5,
+        "current_price": 617.85,
+        "highest_price": 628.5,
+        "initial_stop": 571.72,
+        "trailing_stop": 571.72,
+        "take_profit": 1000.56,
+        "confidence": 50.0
+    },
+    "CEATLTD.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 3539.7,
+        "current_price": 3552.2,
+        "highest_price": 3552.199951171875,
+        "initial_stop": 3440.34,
+        "trailing_stop": 3498.9,
+        "take_profit": 5427.0,
+        "confidence": 50.0
+    },
+    "ENDURANCE.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 2696.8,
+        "current_price": 2587.4,
+        "highest_price": 2696.8,
+        "initial_stop": 2561.7,
+        "trailing_stop": 2561.7,
+        "take_profit": 4168.48,
+        "confidence": 50.0
+    },
+    "LODHA.NS": {
+        "entry_date": "2026-11-27",
+        "entry_price": 1261.2,
+        "current_price": 1251.8,
+        "highest_price": 1261.2,
+        "initial_stop": 1074.19,
+        "trailing_stop": 1074.19,
+        "take_profit": 1951.11,
+        "confidence": 50.0
     }
 }
